@@ -1,0 +1,53 @@
+{
+  "name": "@hychunk/core",
+  "version": "0.0.1",
+  "description": "Framework-agnostic reader for Hytale world saves: region files, chunks and world config.",
+  "keywords": [
+    "hytale",
+    "world",
+    "region",
+    "chunk",
+    "map",
+    "save"
+  ],
+  "license": "LGPL-3.0-or-later",
+  "author": "Stoshe Labs",
+  "homepage": "https://github.com/stoshelabs/hychunk",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/stoshelabs/hychunk.git",
+    "directory": "packages/core"
+  },
+  "bugs": "https://github.com/stoshelabs/hychunk/issues",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./node": {
+      "types": "./dist/node.d.ts",
+      "import": "./dist/node.js"
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "LICENSE.GPL"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "vite build && tsc -p tsconfig.build.json"
+  },
+  "dependencies": {
+    "@hychunk/worldgen": "workspace:*",
+    "fzstd": "^0.1.1",
+    "zstddec": "^0.3.1"
+  }
+}

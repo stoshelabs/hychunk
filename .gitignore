@@ -1,0 +1,23 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+.vite/
+.DS_Store
+*.log
+.nuxt/
+.output/
+.claude/
+
+# Planning notes and the draft e-mail to Hypixel
+ROADMAP.md
+docs/PRIVATE.md
+docs/PRIVATE-ROADMAP.md
+docs/hypixel-email.md
+docs/WORLDGEN.md
+
+# 3D viewer, parked until it is reworked for the data packs
+packages/view3d/
+
+# Build output next to the sources
+packages/*/src/**/*.d.ts

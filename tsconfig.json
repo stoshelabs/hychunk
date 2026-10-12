@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "baseUrl": ".",
+    "paths": {
+      "@hychunk/core": ["packages/core/src/index.ts"],
+      "@hychunk/map": ["packages/map/src/index.ts"],
+      "@hychunk/view3d": ["packages/view3d/src/index.ts"],
+      "@hychunk/view3d/worker": ["packages/view3d/src/worker.ts"],
+      "@hychunk/worldgen": ["packages/worldgen/src/index.ts"]
+    }
+  },
+  "include": ["packages/*/src/**/*", "apps/*/src/**/*.ts", "*.ts", "scripts/**/*.ts"]
+}

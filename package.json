@@ -1,0 +1,26 @@
+{
+  "name": "hychunk-monorepo",
+  "private": true,
+  "description": "Monorepo of HyChunk: a Hytale world map, a 3D view and a world generator port.",
+  "type": "module",
+  "packageManager": "pnpm@10.12.1",
+  "license": "LGPL-3.0-or-later",
+  "author": "Stoshe Labs",
+  "scripts": {
+    "test": "vitest run",
+    "dev": "pnpm --filter site dev",
+    "typecheck": "tsc --noEmit -p tsconfig.json && vue-tsc --noEmit -p apps/site/tsconfig.json",
+    "build": "pnpm -r --filter \"./packages/*\" build"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.0",
+    "@types/pngjs": "^6.0.5",
+    "@types/three": "^0.186.0",
+    "pngjs": "^7.0.0",
+    "three": "^0.186.1",
+    "typescript": "~5.9.3",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.1",
+    "vue-tsc": "^3.3.11"
+  }
+}

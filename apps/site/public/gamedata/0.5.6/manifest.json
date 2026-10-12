@@ -1,0 +1,19 @@
+{
+ "id": "0.5.6",
+ "gameVersion": "0.5.6",
+ "revision": "5ea7c2639aeec92d630569c2bd176051665d263c",
+ "files": {
+  "worldgen.json.gz": 191640,
+  "prefabs.json.gz": 78616,
+  "spawns.json.gz": 5399,
+  "style.json.gz": 20071,
+  "tops.json.gz": 58350,
+  "tops.bin.gz": 2218709
+ },
+ "counts": {
+  "worldgenFiles": 1356,
+  "prefabs": 7825,
+  "spawnTables": 96,
+  "blocks": 2943
+ }
+}

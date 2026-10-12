@@ -1,0 +1,1 @@
+{ "Type": "BLEND", "Alpha": { "File": "t_point" }, "Thresholds": [0.0, 1.0], "Noise": [ { "File": "t_scale" }, { "File": "t_sum" } ] }

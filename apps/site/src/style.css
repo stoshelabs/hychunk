@@ -1,0 +1,84 @@
+:root {
+    --bg: #0b0e14;
+    --surface: #11161f;
+    --surface-2: #171d29;
+    --line: rgba(255, 255, 255, 0.07);
+    --line-strong: rgba(255, 255, 255, 0.14);
+    --text: #e7eaf0;
+    --muted: #8a93a3;
+    --accent: #f5a524;
+    --accent-soft: rgba(245, 165, 36, 0.14);
+    --accent-line: rgba(245, 165, 36, 0.45);
+    --radius: 12px;
+    --header-height: 52px;
+    --rail-width: 60px;
+    --panel-width: 312px;
+    color-scheme: dark;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+    height: 100%;
+    margin: 0;
+}
+
+body {
+    background: var(--bg);
+    color: var(--text);
+    font:
+        14px/1.45 system-ui,
+        -apple-system,
+        'Segoe UI',
+        Roboto,
+        sans-serif;
+    -webkit-text-size-adjust: 100%;
+}
+
+button,
+input,
+select {
+    font: inherit;
+    color: inherit;
+}
+button {
+    cursor: pointer;
+}
+a {
+    color: var(--accent);
+}
+
+.muted {
+    color: var(--muted);
+}
+.small {
+    font-size: 12px;
+}
+
+.eyebrow {
+    margin: 0;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+    :root {
+        --header-height: 48px;
+    }
+}

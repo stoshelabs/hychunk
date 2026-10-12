@@ -1,0 +1,24 @@
+{
+  "name": "site",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@hychunk/core": "workspace:*",
+    "@hychunk/map": "workspace:*",
+    "@hychunk/worldgen": "workspace:*",
+    "@vitral/icons": "^0.2.16",
+    "@vitral/styles": "^0.2.16",
+    "@vitral/themes": "^0.2.16",
+    "@vitral/vue": "^0.2.16",
+    "vue": "^3.5.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.9",
+    "vue-tsc": "^3.3.11"
+  }
+}

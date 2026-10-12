@@ -1,0 +1,46 @@
+{
+  "name": "@hychunk/map",
+  "version": "0.0.1",
+  "description": "A pannable, zoomable 2D canvas map of a Hytale world: chunks, regions, spawn and markers.",
+  "keywords": [
+    "hytale",
+    "map",
+    "canvas",
+    "chunks",
+    "world"
+  ],
+  "license": "LGPL-3.0-or-later",
+  "author": "Stoshe Labs",
+  "homepage": "https://github.com/stoshelabs/hychunk",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/stoshelabs/hychunk.git",
+    "directory": "packages/map"
+  },
+  "bugs": "https://github.com/stoshelabs/hychunk/issues",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "LICENSE.GPL"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "vite build && tsc -p tsconfig.build.json"
+  },
+  "dependencies": {
+    "@hychunk/core": "workspace:*"
+  }
+}

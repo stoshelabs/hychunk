@@ -1,0 +1,1 @@
+{ "Type": "SUM", "Factors": [0.25, 1.0], "Noise": [ { "Seed": "ISL", "NoiseType": "SIMPLEX", "Scale": 0.005, "Normalize": [0.4, 0.8] }, { "NoiseType": "CONSTANT", "Value": 0.35 } ] }

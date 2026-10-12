@@ -1,0 +1,1 @@
+{ "Type": "DISTORTED", "Noise": { "Seed": "AAA", "NoiseType": "SIMPLEX", "Scale": 0.01 }, "Randomizer": { "Generators": [ { "Seed": "W", "NoiseType": "SIMPLEX", "Scale": 0.01, "Amplitude": 50 } ] } }
