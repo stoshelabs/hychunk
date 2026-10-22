@@ -372,6 +372,6 @@
     "Go to player {name}": "Ir até {name}",
     "Filters": "Filtros",
     "Unsupported browser or device": "Dispositivo ou navegador não suportado",
-    "Your browser does not support the modern Web APIs required to run the map (such as DecompressionStream in iOS 16.4+). On iPhone 7 (iOS 15), Safari cannot load the map data.": "O seu navegador não possui suporte às tecnologias modernas da Web necessárias para rodar o mapa (como DecompressionStream no iOS 16.4+). No iPhone 7 (iOS 15), o Safari não consegue carregar os dados do mapa.",
-    "Your browser or device (such as iPhone 7 / iOS 15) does not support modern Web APIs needed to run the map.": "O seu dispositivo ou navegador (como iPhone 7 / iOS 15) não possui suporte a APIs modernas necessárias para rodar o mapa."
+    "Your browser or device does not support the modern Web APIs required to run the map (such as DecompressionStream and Web Workers). Please update your browser or use a newer device.": "O seu navegador ou dispositivo não possui suporte às tecnologias modernas da Web necessárias para rodar o mapa (como DecompressionStream e Web Workers). Recomendamos atualizar o seu navegador ou utilizar um dispositivo mais recente.",
+    "Your browser or device does not support modern Web APIs needed to run the map.": "O seu navegador ou dispositivo não possui suporte às tecnologias modernas necessárias para rodar o mapa."
 }

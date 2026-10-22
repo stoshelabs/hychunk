@@ -52,7 +52,7 @@ const features = [
                 <Icon :icon="warningIcon" :size="16" class="compat-icon" />
                 <span>{{
                     t(
-                        'Your browser or device (such as iPhone 7 / iOS 15) does not support modern Web APIs needed to run the map.'
+                        'Your browser or device does not support modern Web APIs needed to run the map.'
                     )
                 }}</span>
             </div>

@@ -16,7 +16,7 @@ const compat = useCompatibility();
                 <p>
                     {{
                         t(
-                            'Your browser does not support the modern Web APIs required to run the map (such as DecompressionStream in iOS 16.4+). On iPhone 7 (iOS 15), Safari cannot load the map data.'
+                            'Your browser or device does not support the modern Web APIs required to run the map (such as DecompressionStream and Web Workers). Please update your browser or use a newer device.'
                         )
                     }}
                 </p>

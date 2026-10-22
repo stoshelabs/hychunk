@@ -80,7 +80,7 @@ async function json<T>(url: string): Promise<T> {
     // Packs are stored gzipped; a server that already decodes them sends the plain JSON.
     if (url.endsWith('.gz') && res.headers.get('content-encoding') !== 'gzip') {
         if (typeof DecompressionStream === 'undefined') {
-            throw new Error('DecompressionStream is not supported by your browser (Safari on iOS < 16.4 is unsupported)');
+            throw new Error('DecompressionStream is not supported by your browser (requires an updated browser)');
         }
         const stream = res.body!.pipeThrough(new DecompressionStream('gzip'));
         return JSON.parse(await new Response(stream).text()) as T;
@@ -93,7 +93,7 @@ async function bytes(url: string): Promise<ArrayBuffer> {
     if (!res.ok) throw new Error(`${url}: ${res.status}`);
     if (res.headers.get('content-encoding') === 'gzip') return res.arrayBuffer();
     if (typeof DecompressionStream === 'undefined') {
-        throw new Error('DecompressionStream is not supported by your browser (Safari on iOS < 16.4 is unsupported)');
+        throw new Error('DecompressionStream is not supported by your browser (requires an updated browser)');
     }
     return new Response(res.body!.pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
 }
