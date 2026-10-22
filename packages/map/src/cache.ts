@@ -8,7 +8,27 @@ interface Saved {
     regions: Record<string, ArrayBuffer>;
 }
 
+let opened: Promise<IDBDatabase | null> | null = null;
+
+/** The database is opened once: every read and write of the map goes through it, and opening it each time is slow. */
 function open(): Promise<IDBDatabase | null> {
+    if (!opened) {
+        // a database that never opens (blocked by another tab, a broken profile) is given up on, so the map goes on without a cache
+        const p = Promise.race([
+            openDatabase(),
+            new Promise<null>((resolve) =>
+                setTimeout(() => {
+                    if (opened === p) opened = null;
+                    resolve(null);
+                }, 4000)
+            )
+        ]);
+        opened = p;
+    }
+    return opened;
+}
+
+function openDatabase(): Promise<IDBDatabase | null> {
     return new Promise((resolve) => {
         if (typeof indexedDB === 'undefined') return resolve(null);
         try {
@@ -17,7 +37,13 @@ function open(): Promise<IDBDatabase | null> {
                 for (const name of [STORE, TILES])
                     if (!req.result.objectStoreNames.contains(name)) req.result.createObjectStore(name);
             };
-            req.onsuccess = () => resolve(req.result);
+            req.onsuccess = () => {
+                req.result.onversionchange = () => {
+                    req.result.close();
+                    opened = null;
+                };
+                resolve(req.result);
+            };
             req.onerror = () => resolve(null);
         } catch {
             resolve(null); // private windows and blocked storage
@@ -107,6 +133,43 @@ export async function saveRegionTiles(
             tx.onabort = () => resolve();
         } catch {
             resolve(); // out of space or blocked: the cache just stays smaller
+        }
+    });
+}
+
+const PREDICTED_VERSION = 1;
+
+/** The far-out picture of one region (32 × 32 pixels, RGBA) worked out earlier from the generator, or `null`. */
+export async function loadPredicted(key: string, rx: number, rz: number): Promise<Uint8ClampedArray | null> {
+    const db = await open();
+    if (!db) return null;
+    return new Promise((resolve) => {
+        try {
+            const req = db.transaction(TILES).objectStore(TILES).get(`pred|${key}|${rx}.${rz}`);
+            req.onsuccess = () => {
+                const v = req.result as { version: number; pixels: ArrayBuffer } | undefined;
+                resolve(v && v.version === PREDICTED_VERSION ? new Uint8ClampedArray(v.pixels) : null);
+            };
+            req.onerror = () => resolve(null);
+        } catch {
+            resolve(null);
+        }
+    });
+}
+
+export async function savePredicted(key: string, rx: number, rz: number, pixels: Uint8ClampedArray): Promise<void> {
+    const db = await open();
+    if (!db) return;
+    await new Promise<void>((resolve) => {
+        try {
+            const tx = db.transaction(TILES, 'readwrite');
+            const copy = pixels.buffer.slice(pixels.byteOffset, pixels.byteOffset + pixels.byteLength);
+            tx.objectStore(TILES).put({ version: PREDICTED_VERSION, pixels: copy }, `pred|${key}|${rx}.${rz}`);
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => resolve();
+            tx.onabort = () => resolve();
+        } catch {
+            resolve();
         }
     });
 }

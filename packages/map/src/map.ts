@@ -2,6 +2,7 @@ import {
     chunkOf,
     COLORS_VERSION,
     createInlinePool,
+    playerColor,
     PoiGenerator,
     REGION_SIZE,
     RENDER_VERSION,
@@ -13,7 +14,9 @@ import {
     type TileResult,
     type WorldData
 } from '@hychunk/core';
-import { loadMarkerCells, loadOverview, saveMarkerCells, saveOverview } from './cache';
+import { planFlight, type Flight } from './fly';
+import { markerIconName } from './markers';
+import { loadMarkerCells, loadOverview, loadPredicted, saveMarkerCells, saveOverview, savePredicted } from './cache';
 import { Overview } from './overview';
 import { TileCache } from './tilecache';
 import { ScanQueue } from './scan';
@@ -33,6 +36,8 @@ export interface MarkerFilters {
 }
 
 export interface MapOptions {
+    /** What a marker is called on the map, when that is not its own `name` (the app translates it). */
+    markerLabel?: (m: MapMarker) => string;
     chunkGrid: boolean;
     regionGrid: boolean;
     spawn: boolean;
@@ -106,9 +111,11 @@ export interface SpiderfyState {
 const MIN_SCALE = 0.05;
 const MAX_SCALE = 32;
 /** Bump when the structures a square holds change (what is searched, how they are named), so saved squares are not reused. */
-const STRUCTURES_VERSION = 3;
+const STRUCTURES_VERSION = 5;
 /** How long a tile of a predicted chunk waits for the trees, rocks and plants of its squares before it is drawn without them. */
 const DECOR_WAIT_MS = 700;
+/** How long a read of the browser's cache may take before the chunk is drawn without it. */
+const CACHE_WAIT_MS = 1500;
 
 /** A tree, rock or plant spot (`SiteShape` of the generator), as handed between threads. */
 interface DecorSite {
@@ -195,6 +202,9 @@ export class WorldMap {
         startTime: number;
         duration: number;
     } | null = null;
+
+    /** A fly-to under way (`flyTo`): the path and when it began. */
+    private flight: { path: Flight; startTime: number; to: { x: number; z: number; scale: number } } | null = null;
 
     private pool: ChunkPool;
     private ownPool: boolean;
@@ -416,8 +426,31 @@ export class WorldMap {
     /** Centres on a block position, optionally at a zoom (pixels per block). */
     goTo(x: number, z: number, scale = this.view.scale) {
         this.smoothCam = null;
+        this.flight = null;
         this.view = { x, z, scale: Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale)) };
         this.changed();
+    }
+
+    /**
+     * Flies to a block position: the view zooms out, crosses the distance and zooms in again (Leaflet's `flyTo`), so a far place is
+     * reached in about a second and the terrain on the way is not drawn at full detail. A short hop is a plain glide.
+     * Any touch of the map stops it where it is.
+     */
+    flyTo(x: number, z: number, scale = this.view.scale, duration?: number) {
+        const to = { x, z, scale: Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale)) };
+        const width = this.canvas.width / this.dpr;
+        const path = planFlight({ from: { ...this.view }, to, width });
+        // close by, a flight would only zoom out and in again: gliding is enough
+        if (!path || Math.hypot(x - this.view.x, z - this.view.z) * this.view.scale < width * 0.6)
+            return this.smoothGoTo(x, z, to.scale);
+        this.smoothCam = null;
+        // a long way would take seconds; a place is reached in 2.5 seconds at most
+        this.flight = {
+            path: { ...path, duration: duration ?? Math.min(path.duration, 2.5) },
+            startTime: performance.now(),
+            to
+        };
+        this.dirty = true;
     }
 
     /** Smoothly animates camera to target coordinates and scale with cubic easing */
@@ -680,6 +713,7 @@ export class WorldMap {
         });
         on(c, 'pointerdown', (e: PointerEvent) => {
             this.smoothCam = null;
+            this.flight = null;
             this.mousePos = null;
             c.setPointerCapture(e.pointerId);
             this.pointers.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
@@ -791,6 +825,7 @@ export class WorldMap {
 
     /** Zooms keeping the block under (px, py) where it is. */
     private zoomAt(px: number, py: number, factor: number) {
+        this.flight = null;
         const before = this.toBlock(px, py);
         this.view.scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, this.view.scale * factor));
         const after = this.toBlock(px, py);
@@ -869,9 +904,20 @@ export class WorldMap {
             const key = `${rx}.${rz}`;
             this.predictedAsked.add(key);
             this.predictedInflight++;
-            this.pool
-                .run<Uint8ClampedArray | null>('predictRegion', { rx, rz }, 0.5)
-                .promise.then((pixels) => {
+            const saved = this.cacheKey;
+            // a region worked out before comes from the browser's cache; otherwise a worker makes it, and it is kept for next time
+            (saved ? loadPredicted(saved, rx, rz) : Promise.resolve(null))
+                .then(
+                    (hit) =>
+                        hit ??
+                        this.pool
+                            .run<Uint8ClampedArray | null>('predictRegion', { rx, rz }, 0.5)
+                            .promise.then((made) => {
+                                if (made && saved) void savePredicted(saved, rx, rz, made);
+                                return made;
+                            })
+                )
+                .then((pixels) => {
                     if (this.dead || !this.predictedOn || !pixels) return;
                     const c = document.createElement('canvas');
                     c.width = c.height = REGION_SIZE;
@@ -993,14 +1039,16 @@ export class WorldMap {
         return (r.c1 - r.c0 + 1) * (r.r1 - r.r0 + 1) > MAX_DETAIL_VISIBLE ? v : r;
     }
 
+    /** Too far out (or too much on screen) for single chunks: only the regions' overview is drawn. */
+    private overviewOnly(v: { c0: number; r0: number; c1: number; r1: number }) {
+        return 32 * this.view.scale < DETAIL_MIN_PX || (v.c1 - v.c0 + 1) * (v.r1 - v.r0 + 1) > MAX_DETAIL_VISIBLE;
+    }
+
     private schedule() {
         this.schedulePredicted();
         this.scheduleSpawnArea();
         const view = this.visibleChunks();
-        if (
-            32 * this.view.scale < DETAIL_MIN_PX ||
-            (view.c1 - view.c0 + 1) * (view.r1 - view.r0 + 1) > MAX_DETAIL_VISIBLE
-        ) {
+        if (this.overviewOnly(view)) {
             this.queue = [];
             this.queued.clear();
             this.rectKey = '';
@@ -1046,6 +1094,18 @@ export class WorldMap {
     /** The share of the chunks on screen that are drawn, 0 to 1 (what is prefetched around the screen does not count). */
     progress() {
         const v = this.visibleChunks();
+        if (this.overviewOnly(v)) {
+            // zoomed far out no chunk is drawn: what is waited for are the regions of the far-out picture
+            if (!this.predictedOn) return 1;
+            let regions = 0,
+                ready = 0;
+            for (let rz = floorDiv(v.r0, REGION_SIZE); rz <= floorDiv(v.r1, REGION_SIZE); rz++)
+                for (let rx = floorDiv(v.c0, REGION_SIZE); rx <= floorDiv(v.c1, REGION_SIZE); rx++) {
+                    regions++;
+                    if (this.predicted.has(`${rx}.${rz}`)) ready++;
+                }
+            return regions ? ready / regions : 1;
+        }
         let total = 0,
             done = 0;
         for (let z = v.r0; z <= v.r1; z++) {
@@ -1135,7 +1195,11 @@ export class WorldMap {
     }
 
     private async fetchTile(cx: number, cz: number, detail: boolean): Promise<TileResult> {
-        const hit = await this.tileCache.get(cx, cz);
+        // a cache that is slow to answer must not hold the drawing back: after a moment the chunk is made anew
+        const hit = await Promise.race([
+            this.tileCache.get(cx, cz),
+            new Promise<null>((r) => setTimeout(() => r(null), CACHE_WAIT_MS))
+        ]);
         if (hit) return hit; // a cached predicted chunk may or may not have its decor: `decor` says
         // A chunk the save lacks is drawn once, with its trees, rocks and plants: those are worked out a square at a time, shared by
         // every tile, and only take a moment, so the tile waits for them instead of being drawn twice.
@@ -1390,6 +1454,17 @@ export class WorldMap {
         if (this.dead) return;
         const now = performance.now();
 
+        if (this.flight) {
+            const t = (now - this.flight.startTime) / (this.flight.path.duration * 1000);
+            const p = this.flight.path.at(t);
+            this.view.x = p.x;
+            this.view.z = p.z;
+            this.view.scale = p.scale;
+            this.changed();
+            if (t >= 1) this.flight = null;
+            else this.dirty = true;
+        }
+
         // 1. Update smooth camera animation
         if (this.smoothCam) {
             const p = Math.min(1, (now - this.smoothCam.startTime) / this.smoothCam.duration);
@@ -1511,7 +1586,7 @@ export class WorldMap {
                 this.pinScreen(
                     sc.x,
                     sc.y,
-                    '#e11d8f',
+                    playerColor(p),
                     p.name,
                     dark,
                     this.options.playerSkins === false
@@ -1589,13 +1664,13 @@ export class WorldMap {
 
         if (head) {
             // a player with a skin: the face in a ring, where the dot would be
-            const r = 13;
+            const r = 14;
             ctx.save();
             ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
             ctx.shadowBlur = 6;
             ctx.shadowOffsetY = 2;
             ctx.beginPath();
-            ctx.arc(sx, sy, r + 2, 0, Math.PI * 2);
+            ctx.arc(sx, sy, r + 3, 0, Math.PI * 2);
             ctx.fillStyle = fill;
             ctx.fill();
             ctx.restore();
@@ -1820,36 +1895,7 @@ export class WorldMap {
             }
             const m = c.markers[0]!;
             const cat = getMarkerCategory(m);
-            let iconName = m.icon ?? '';
-            const nameLower = (m.name || '').toLowerCase();
-            if (!iconName) {
-                if (cat === 'spawns') iconName = 'Spawn';
-                else if (cat === 'temples') iconName = 'Temple_Gateway';
-                else if (cat === 'dungeons') iconName = 'Dungeon';
-                else if (cat === 'uncommonMobs') {
-                    if (nameLower.includes('scarak') || nameLower.includes('broodmother'))
-                        iconName = 'Scarak_Broodmother';
-                    else if (nameLower.includes('golem')) iconName = 'Golem_Ancient';
-                    else if (nameLower.includes('dragon')) iconName = 'Dragon_Frost';
-                    else if (nameLower.includes('void') || nameLower.includes('vazio')) iconName = 'Spawn_Void';
-                    else if (nameLower.includes('trork') || nameLower.includes('chieftain'))
-                        iconName = 'Trork_Chieftain';
-                    else iconName = 'Golem_Ancient';
-                } else if (cat === 'farms') iconName = 'Farm';
-                else if (cat === 'camps') iconName = 'Campfire';
-                else if (cat === 'portals')
-                    iconName =
-                        nameLower.includes('void') || nameLower.includes('vazio')
-                            ? 'Portal_Void'
-                            : nameLower.includes('invasion')
-                              ? 'PortalInvasion'
-                              : 'Portal';
-                else if (nameLower.includes('camp')) iconName = 'Campfire';
-                else if (nameLower.includes('home')) iconName = 'Home';
-                else if (nameLower.includes('warp')) iconName = 'Warp';
-                else if (m.source === 'user') iconName = 'UserA';
-                else iconName = 'Prefab';
-            }
+            const iconName = markerIconName(m);
 
             let color = '#3b82f6';
             if (cat === 'spawns') color = '#f59e0b';
@@ -1865,7 +1911,9 @@ export class WorldMap {
             const rare = cat === 'spawns' || cat === 'temples' || cat === 'portals';
             const emphasized = isHovered || m.id === this.selectedId;
             const label =
-                (rare && this.view.scale >= 0.35) || this.view.scale >= 2.4 || emphasized ? m.name || null : null;
+                (rare && this.view.scale >= 0.35) || this.view.scale >= 2.4 || emphasized
+                    ? (this.options.markerLabel?.(m) ?? m.name) || null
+                    : null;
             singles.push({ m, iconName, color, label, emphasized });
         }
 
@@ -2118,46 +2166,22 @@ export class WorldMap {
             // Get icon, color, label
             const m = droplet.marker;
             const cat = getMarkerCategory(m);
-            let iconName = m.icon ?? '';
-            const nameLower = (m.name || '').toLowerCase();
-            if (!iconName) {
-                if (cat === 'spawns') iconName = 'Spawn';
-                else if (cat === 'temples') iconName = 'Temple_Gateway';
-                else if (cat === 'dungeons') iconName = 'Dungeon';
-                else if (cat === 'uncommonMobs') {
-                    if (nameLower.includes('scarak') || nameLower.includes('broodmother'))
-                        iconName = 'Scarak_Broodmother';
-                    else if (nameLower.includes('golem')) iconName = 'Golem_Ancient';
-                    else if (nameLower.includes('dragon')) iconName = 'Dragon_Frost';
-                    else if (nameLower.includes('void') || nameLower.includes('vazio')) iconName = 'Spawn_Void';
-                    else if (nameLower.includes('trork') || nameLower.includes('chieftain'))
-                        iconName = 'Trork_Chieftain';
-                    else iconName = 'Golem_Ancient';
-                } else if (cat === 'farms') iconName = 'Farm';
-                else if (cat === 'portals')
-                    iconName =
-                        nameLower.includes('void') || nameLower.includes('vazio')
-                            ? 'Portal_Void'
-                            : nameLower.includes('invasion')
-                              ? 'PortalInvasion'
-                              : 'Portal';
-                else if (nameLower.includes('camp')) iconName = 'Campfire';
-                else if (nameLower.includes('home')) iconName = 'Home';
-                else if (nameLower.includes('warp')) iconName = 'Warp';
-                else if (m.source === 'user') iconName = 'UserA';
-                else iconName = 'Prefab';
-            }
+            const iconName = markerIconName(m);
 
             let color = '#3b82f6';
             if (cat === 'spawns') color = '#f59e0b';
             else if (cat === 'temples') color = '#8b5cf6';
-            else if (cat === 'dungeons') color = '#ef4444';
-            else if (cat === 'uncommonMobs') color = '#f97316';
+            else if (cat === 'dungeons' || cat === 'challenges') color = '#ef4444';
+            else if (cat === 'uncommonMobs' || cat === 'encounters') color = '#f97316';
+            else if (cat === 'camps') color = '#a16207';
             else if (cat === 'farms') color = '#10b981';
             else if (cat === 'portals') color = '#ec4899';
             else if (cat === 'user') color = '#06b6d4';
 
-            const label = isHovered || this.spiderfy.droplets.length <= 6 ? m.name || null : null;
+            const label =
+                isHovered || this.spiderfy.droplets.length <= 6
+                    ? (this.options.markerLabel?.(m) ?? m.name) || null
+                    : null;
             this.drawOfficialIconScreen(sx, sy, iconName, label, color, isHovered, dark);
         }
     }

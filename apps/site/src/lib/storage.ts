@@ -1,7 +1,8 @@
 export const STORAGE_KEYS = {
-    gameVersion: 'hychunk.gameVersion',
     hideDone: 'hychunk.hideDone',
-    done: (worldKey: string) => `hychunk.done.${worldKey}`
+    done: (worldKey: string) => `hychunk.done.${worldKey}`,
+    section: (id: string) => `hychunk.section.${id}`,
+    ignoreCacheWarning: 'hychunk.ignoreCacheWarning'
 };
 
 export function readStorage(key: string): string | null {

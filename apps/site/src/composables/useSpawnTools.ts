@@ -1,4 +1,4 @@
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useGameData } from './useGameData';
 import { useSession } from './useSession';
 
@@ -35,6 +35,13 @@ function suggest(all: string[], query: string) {
     const contains = all.filter((x) => !x.toLowerCase().startsWith(q) && x.toLowerCase().includes(q));
     return [...starts, ...contains].slice(0, MAX_SUGGESTIONS);
 }
+
+// Another game version has other mobs and biomes: what was picked may not exist there.
+watch(game.data, () => {
+    if (mobShown.value && !mobIds.value.includes(mobShown.value)) clearMob();
+    else if (mobShown.value) session.map.value?.setSpawnArea(game.spawns.value?.envsOf(mobShown.value) ?? null);
+    if (biomeShown.value && !biomes.value.some((b) => b.label === biomeShown.value)) clearBiome();
+});
 
 function showMob(picked?: unknown) {
     if (typeof picked === 'string') mobQuery.value = picked;

@@ -1,6 +1,6 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 
-export type SidebarTab = 'places' | 'map' | 'world';
+export type SidebarTab = 'places' | 'map' | 'world' | 'legal';
 
 const MOBILE_QUERY = '(max-width: 768px)';
 

@@ -11,6 +11,10 @@ export interface MapMarker {
     category?: string;
     /** Spawn markers inside it (names such as `Trork_Brawler`), for a structure. */
     spawns?: string[];
+    /** Markers of one group that lie close together are one place (the pieces of a ruined city, the entrances of a dungeon): see `mergeGroups`. */
+    group?: string;
+    /** The block a portal marker stands for (`Forgotten_Temple_Portal_Enter`), which tells where it leads. */
+    block?: string;
 }
 
 const pretty = (key: string) => {

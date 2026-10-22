@@ -4,8 +4,6 @@ import { check, folderOpen, sparkles } from '@vitral/icons';
 import { useSession } from '../composables/useSession';
 import { useUpload } from '../composables/useUpload';
 import { t, tn } from '../lib/i18n';
-import LanguageSwitch from './LanguageSwitch.vue';
-import LegalNotice from './LegalNotice.vue';
 
 const session = useSession();
 const upload = useUpload();
@@ -15,7 +13,7 @@ const isCurrent = (id: string) => !session.isSeedWorld.value && session.world.va
 
 <template>
     <div class="world-panel">
-        <section class="current">
+        <section class="current" data-tour="world-current">
             <span class="eyebrow">{{ t('Current world') }}</span>
             <strong>{{ session.isSeedWorld.value ? t('Seed map') : session.world.value?.name }}</strong>
             <span class="muted small">
@@ -27,7 +25,7 @@ const isCurrent = (id: string) => !session.isSeedWorld.value && session.world.va
             </span>
         </section>
 
-        <div class="buttons">
+        <div class="buttons" data-tour="world-buttons">
             <Button :icon="folderOpen" :label="t('Open a saved world')" size="small" fluid @click="upload.open" />
             <Button
                 :icon="sparkles"
@@ -40,7 +38,7 @@ const isCurrent = (id: string) => !session.isSeedWorld.value && session.world.va
             />
         </div>
 
-        <section v-if="session.worlds.value.length">
+        <section v-if="session.worlds.value.length" data-tour="world-list">
             <h3 class="eyebrow">{{ t('Worlds in the opened folder') }}</h3>
             <ul>
                 <li v-for="w in session.worlds.value" :key="w.id">
@@ -58,20 +56,10 @@ const isCurrent = (id: string) => !session.isSeedWorld.value && session.world.va
                 </li>
             </ul>
         </section>
-
-        <section>
-            <h3 class="eyebrow">{{ t('Language') }}</h3>
-            <LanguageSwitch />
-        </section>
-        <LegalNotice class="legal" />
     </div>
 </template>
 
 <style scoped>
-.legal {
-    text-align: left;
-    margin-top: 6px;
-}
 .world-panel {
     display: flex;
     flex-direction: column;

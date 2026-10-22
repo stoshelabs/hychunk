@@ -12,8 +12,24 @@ import { describe, expect, it } from 'vitest';
 import { extractWorldGenFiles } from './world/source';
 import { buildPrefabTable, buildPrefabTops } from './world/prefabCatalog';
 import { buildSpawnTable } from './world/spawns';
+import { buildLang } from './gameData.lang';
+import { buildPortals } from './gameData.portals';
 
-const assets = process.env.HYCHUNK_ASSETS, jar = process.env.HYCHUNK_SERVER_JAR, out = process.env.HYCHUNK_GAMEDATA_OUT;
+const assets = process.env.HYCHUNK_ASSETS,
+    jar = process.env.HYCHUNK_SERVER_JAR,
+    out = process.env.HYCHUNK_GAMEDATA_OUT;
+
+/** `BlockChunk.VERSION` of the jar: the version of the chunk format its saves are written in (a save can be matched to a pack by it). */
+function saveFormatOf(path: string): number {
+    const text = execFileSync(
+        'javap',
+        ['-constants', '-cp', path, 'com.hypixel.hytale.server.core.universe.world.chunk.BlockChunk'],
+        { encoding: 'utf8' }
+    );
+    const hit = /static final int VERSION = (\d+);/.exec(text);
+    if (!hit) throw new Error('BlockChunk.VERSION not found');
+    return Number(hit[1]);
+}
 
 /** `Implementation-Version` and revision from the server jar's manifest. */
 function versionOf(path: string): { version: string; revision: string } {
@@ -25,13 +41,17 @@ function versionOf(path: string): { version: string; revision: string } {
 describe.skipIf(!assets || !jar || !out)('game data pack', () => {
     it('is written', async () => {
         const { version, revision } = versionOf(jar!);
+        const saveFormat = saveFormatOf(jar!);
         expect(version).toBeTruthy();
         const dir = `${out}/${version}`;
         mkdirSync(dir, { recursive: true });
         const pack = await openZipPack('Assets.zip', await fromPath(assets!));
 
         const all = await extractWorldGenFiles(pack as any);
-        const worldgen = Object.fromEntries(Object.entries(all).filter(([p]) => !/(^|\/)Cave\//.test(p) || p.endsWith('/Cave/Caves.json')));
+        const worldgen = Object.fromEntries(
+            Object.entries(all).filter(([p]) => !/(^|\/)Cave\//.test(p) || p.endsWith('/Cave/Caves.json'))
+        );
+        worldgen['Game.json'] = { gameVersion: version }; // read by `loadWorldGen`: some generator details changed between versions
         const prefabs = await buildPrefabTable(pack as any);
         const spawns = await buildSpawnTable(pack as any);
         const style = toMapStyle(await buildBlockTable([pack as any]));
@@ -46,16 +66,45 @@ describe.skipIf(!assets || !jar || !out)('game data pack', () => {
         put('prefabs', prefabs);
         put('spawns', spawns);
         put('style', style);
+        buildPortals(assets!, dir);
+        buildLang(assets!, dir);
         const tops = await buildPrefabTops(pack as any);
         put('tops', { names: tops.names, index: tops.index });
-        const topsBin = gzipSync(Buffer.from(tops.data.buffer, tops.data.byteOffset, tops.data.byteLength), { level: 9 });
+        const topsBin = gzipSync(Buffer.from(tops.data.buffer, tops.data.byteOffset, tops.data.byteLength), {
+            level: 9
+        });
         writeFileSync(`${dir}/tops.bin.gz`, topsBin);
         files['tops.bin.gz'] = topsBin.length;
-        writeFileSync(`${dir}/manifest.json`, JSON.stringify({ id: version, gameVersion: version, revision, files, counts: { worldgenFiles: Object.keys(worldgen).length, prefabs: Object.keys(prefabs.prefabs).length, spawnTables: spawns.groups.length, blocks: Object.keys(style.blocks).length } }, null, 1));
+        writeFileSync(
+            `${dir}/manifest.json`,
+            JSON.stringify(
+                {
+                    id: version,
+                    gameVersion: version,
+                    revision,
+                    saveFormat,
+                    files,
+                    counts: {
+                        worldgenFiles: Object.keys(worldgen).length,
+                        prefabs: Object.keys(prefabs.prefabs).length,
+                        spawnTables: spawns.groups.length,
+                        blocks: Object.keys(style.blocks).length
+                    }
+                },
+                null,
+                1
+            )
+        );
 
         const indexPath = `${out}/index.json`;
-        const index: { latest: string; versions: { id: string; label: string }[] } = existsSync(indexPath) ? JSON.parse(readFileSync(indexPath, 'utf8')) : { latest: version, versions: [] };
-        if (!index.versions.some((v) => v.id === version)) index.versions.push({ id: version, label: `Hytale ${version}` });
+        const index: { latest: string; versions: { id: string; label: string; saveFormat?: number }[] } = existsSync(
+            indexPath
+        )
+            ? JSON.parse(readFileSync(indexPath, 'utf8'))
+            : { latest: version, versions: [] };
+        const entry = index.versions.find((v) => v.id === version);
+        if (entry) entry.saveFormat = saveFormat;
+        else index.versions.push({ id: version, label: `Hytale ${version}`, saveFormat });
         index.versions.sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
         index.latest = index.versions[index.versions.length - 1]!.id;
         writeFileSync(indexPath, JSON.stringify(index, null, 1));

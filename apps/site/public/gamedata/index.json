@@ -1,9 +1,15 @@
 {
- "latest": "0.5.6",
+ "latest": "0.7.0",
  "versions": [
   {
    "id": "0.5.6",
-   "label": "Hytale 0.5.6"
+   "label": "Hytale 0.5.6",
+   "saveFormat": 3
+  },
+  {
+   "id": "0.7.0",
+   "label": "Hytale 0.7.0",
+   "saveFormat": 4
   }
  ]
 }

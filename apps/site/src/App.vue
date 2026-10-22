@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted } from 'vue';
+import AppTour from './components/AppTour.vue';
 import AppHeader from './components/AppHeader.vue';
 import HomeScreen from './components/HomeScreen.vue';
+import LegalPage from './components/LegalPage.vue';
 import MapStage from './components/MapStage.vue';
 import SidebarPanel from './components/SidebarPanel.vue';
 import SplashScreen from './components/SplashScreen.vue';
+import CacheWarning from './components/CacheWarning.vue';
 import ToastHost from './components/ToastHost.vue';
 import UploadDialog from './components/UploadDialog.vue';
 import { useGameData } from './composables/useGameData';
@@ -34,6 +37,9 @@ onBeforeUnmount(session.dispose);
             <HomeScreen v-if="!session.world.value" />
         </main>
         <UploadDialog />
+        <LegalPage />
+        <AppTour />
+        <CacheWarning />
         <ToastHost />
     </div>
 </template>

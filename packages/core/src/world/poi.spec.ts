@@ -192,7 +192,7 @@ describe('portals', () => {
         await settle();
         const all = gen.getMarkersInRect(0, 0, 511, 511);
         expect(all).toHaveLength(1);
-        expect(all[0]).toMatchObject({ name: 'Forgotten Temple portal', category: 'portals', x: 82, y: 103, z: 103 });
+        expect(all[0]).toMatchObject({ name: 'Forgotten Temple portal', category: 'portals', block: 'Forgotten_Temple_Portal_Enter', x: 82, y: 103, z: 103 });
     });
 
     it('reads the instance from the block name', () => {

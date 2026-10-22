@@ -28,15 +28,20 @@ export function readFluidSection(chunk: BsonDocument, index: number): SectionPal
     return data ? readSectionPalette(data, 0) : null;
 }
 
-/** `BlockChunk.Data`: a flag byte, the height palette (`u16` count, `i16` keys, `i32` length, 10-bit ids), then the tint palette (`i32` keys). */
+/**
+ * `BlockChunk.Data`: a flag byte, the height palette (`u16` count, `i16` keys, `i32` length, 10-bit ids; saves up to version 3
+ * only, the heights moved to their own component in version 4), then the tint palette (`i32` keys).
+ */
 export function readTint(chunk: BsonDocument): Int32Array | null {
     const data = asDoc(asDoc(chunk.Components)?.BlockChunk)?.Data as Uint8Array | undefined;
     if (!data) return null;
     try {
         const v = new DataView(data.buffer, data.byteOffset, data.byteLength);
         let o = 1;
-        o += 2 + v.getUint16(o, true) * 2;
-        o += 4 + v.getInt32(o, true);
+        if (((asDoc(asDoc(chunk.Components)?.BlockChunk)?.Version as number | undefined) ?? 3) < 4) {
+            o += 2 + v.getUint16(o, true) * 2;
+            o += 4 + v.getInt32(o, true);
+        }
         const count = v.getUint16(o, true);
         if (count === 0) return null;
         const keys = new Int32Array(count);
@@ -56,10 +61,14 @@ export function readTint(chunk: BsonDocument): Int32Array | null {
     }
 }
 
-/** `EnvironmentChunk.Data`: `i32` count, `{i32 id, utf8 name}`, then per column `i32 n`, `n` ascending max ys, `n + 1` ids (big endian). Returns the name at `ys[col]` for the columns where that is >= 0. */
+/**
+ * The environment at `ys[col]` for the columns where that is >= 0. Saves up to version 3 keep it in one `EnvironmentChunk.Data`:
+ * `i32` count, `{i32 id, utf8 name}`, then per column `i32 n`, `n` ascending max ys, `n + 1` ids (big endian). Later saves keep it
+ * per section (`readSectionEnvironments`).
+ */
 export function readEnvironments(chunk: BsonDocument, ys: Int16Array): (string | null)[] | null {
     const data = asDoc(asDoc(chunk.Components)?.EnvironmentChunk)?.Data as Uint8Array | undefined;
-    if (!data) return null;
+    if (!data) return readSectionEnvironments(chunk, ys);
     try {
         const v = new DataView(data.buffer, data.byteOffset, data.byteLength);
         const names = new Map<number, string>();
@@ -90,6 +99,99 @@ export function readEnvironments(chunk: BsonDocument, ys: Int16Array): (string |
     } catch {
         return null;
     }
+}
+
+/** One section's `Environment.Data`, read to a lookup of (column, y inside the section). */
+function readEnvironmentSection(data: Uint8Array): (col: number, y: number) => string | null {
+    let o = 0;
+    const varInt = () => {
+        let value = 0,
+            shift = 0;
+        for (;;) {
+            const b = data[o++]!;
+            value |= (b & 0x7f) << shift;
+            if (!(b & 0x80)) return value;
+            shift += 7;
+        }
+    };
+    const td = new TextDecoder();
+    const palette: string[] = [];
+    for (let i = 0, n = varInt(); i < n; i++) {
+        const len = (data[o]! << 8) | data[o + 1]!;
+        palette.push(td.decode(data.subarray(o + 2, o + 2 + len)));
+        o += 2 + len;
+    }
+    const mode = data[o++]!;
+    if (mode === 0) {
+        const name = palette[varInt()] ?? null;
+        return () => name;
+    }
+    /** A column's runs: the max y of each run but the last, then the palette index of each run. */
+    const record = () => {
+        const boundaries = data[o++]!;
+        const maxYs: number[] = [];
+        for (let r = 0; r < boundaries; r++) maxYs.push(data[o++]!);
+        const values: number[] = [];
+        for (let r = 0; r <= boundaries; r++) values.push(varInt());
+        return { maxYs, values };
+    };
+    const columns: { maxYs: number[]; values: number[] }[] = [];
+    if (mode === 1) {
+        for (let c = 0; c < 1024; c++) columns.push(record());
+    } else {
+        const unique: { maxYs: number[]; values: number[] }[] = [];
+        for (let i = 0, n = varInt(); i < n; i++) unique.push(record());
+        const bits = unique.length <= 1 ? 0 : 32 - Math.clz32(unique.length - 1);
+        let acc = 0,
+            have = 0;
+        for (let c = 0; c < 1024; c++) {
+            while (have < bits) {
+                acc = ((acc << 8) | data[o++]!) >>> 0;
+                have += 8;
+            }
+            have -= bits;
+            columns.push(unique[(acc >>> have) & ((1 << bits) - 1)] ?? unique[0]!);
+            acc &= (1 << have) - 1;
+        }
+    }
+    return (col, y) => {
+        const { maxYs, values } = columns[col]!;
+        let k = maxYs.length;
+        for (let i = 0; i < maxYs.length; i++)
+            if (y <= maxYs[i]!) {
+                k = i;
+                break;
+            }
+        return palette[values[k]!] ?? null;
+    };
+}
+
+/** Environments of the saves that keep one per section (`ChunkColumn.Sections[i].Components.Environment`). */
+function readSectionEnvironments(chunk: BsonDocument, ys: Int16Array): (string | null)[] | null {
+    const sections = asDoc(asDoc(chunk.Components)?.ChunkColumn)?.Sections as BsonDocument[] | undefined;
+    if (!sections) return null;
+    const lookups = new Map<number, ((col: number, y: number) => string | null) | null>();
+    const out = new Array<string | null>(1024).fill(null);
+    let any = false;
+    for (let col = 0; col < 1024; col++) {
+        const y = ys[col]!;
+        if (y < 0) continue;
+        const index = y >> 5;
+        let lookup = lookups.get(index);
+        if (lookup === undefined) {
+            const data = asDoc(asDoc(sections[index]?.Components)?.Environment)?.Data as Uint8Array | undefined;
+            try {
+                lookup = data ? readEnvironmentSection(data) : null;
+            } catch {
+                lookup = null;
+            }
+            lookups.set(index, lookup);
+        }
+        if (!lookup) continue;
+        out[col] = lookup(col, y & 31);
+        any = true;
+    }
+    return any ? out : null;
 }
 
 const isEmpty = (p: SectionPalette) => p.names.length === 1 && p.names[0] === 'Empty';

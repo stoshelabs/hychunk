@@ -1,0 +1,51 @@
+{
+ "blocks": {
+  "Forgotten_Temple_Portal_Enter": {
+   "kind": "instance",
+   "instance": "Forgotten_Temple_Goblins"
+  },
+  "Goblin_Breach_Portal": {
+   "kind": "instance",
+   "instance": "Portals/Portals_Goblins"
+  },
+  "Portal_Return": {
+   "kind": "return"
+  }
+ },
+ "instances": {
+  "Forgotten_Temple_Goblins": {
+   "title": "Forgotten Temple",
+   "subtitle": "Edge of the Echo",
+   "titleKey": "instances.forgotten_temple.title",
+   "subtitleKey": "instances.forgotten_temple.subtitle",
+   "openable": true,
+   "regions": [
+    "-1.-1",
+    "-1.0",
+    "0.-1",
+    "0.0",
+    "3.4",
+    "3.5",
+    "4.3",
+    "4.4",
+    "4.5",
+    "5.3",
+    "5.4",
+    "5.5",
+    "6.4"
+   ],
+   "spawn": {
+    "x": 5095,
+    "y": 169,
+    "z": 4983.5
+   }
+  },
+  "Portals/Portals_Goblins": {
+   "title": "The Guttering Hollows",
+   "titleKey": "portals.goblinBreach",
+   "openable": false,
+   "regions": [],
+   "spawn": null
+  }
+ }
+}

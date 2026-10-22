@@ -6,6 +6,8 @@ import { useSession } from '../composables/useSession';
 import { t } from '../lib/i18n';
 import ContextMenu from './ContextMenu.vue';
 import MapControls from './MapControls.vue';
+import InstanceBar from './InstanceBar.vue';
+import MapNotice from './MapNotice.vue';
 import PlaceDetails from './PlaceDetails.vue';
 import StatusHud from './StatusHud.vue';
 
@@ -35,7 +37,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <section>
+    <section data-tour="map">
         <canvas
             v-show="session.world.value"
             ref="canvas"
@@ -45,6 +47,8 @@ onBeforeUnmount(() => {
         <template v-if="session.world.value">
             <MapControls />
             <StatusHud />
+            <InstanceBar />
+            <MapNotice />
             <PlaceDetails />
         </template>
         <ContextMenu />

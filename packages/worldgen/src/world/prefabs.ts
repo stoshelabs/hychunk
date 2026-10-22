@@ -145,7 +145,7 @@ export interface PrefabSite {
 }
 
 /** `PrefabRotation` on a block offset: 90 turns (x, z) to (z, -x). */
-function rotateXZ(x: number, z: number, rotation: number): [number, number] {
+export function rotateXZ(x: number, z: number, rotation: number): [number, number] {
     return rotation === 0 ? [x, z] : rotation === 1 ? [z, -x] : rotation === 2 ? [-x, -z] : [-z, x];
 }
 

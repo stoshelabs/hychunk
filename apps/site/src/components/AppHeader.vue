@@ -1,19 +1,24 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { Icon, Select } from '@vitral/vue';
-import { globe, menu } from '@vitral/icons';
+import { globe, helpCircle, menu } from '@vitral/icons';
 import { useGameData } from '../composables/useGameData';
 import { useLayout } from '../composables/useLayout';
 import { useSession } from '../composables/useSession';
+import { useTour } from '../composables/useTour';
 import { LOGO_URL } from '../lib/assets';
 import { lang, langs, languages, setLang, t, type Lang } from '../lib/i18n';
 
 const game = useGameData();
 const layout = useLayout();
 const session = useSession();
+const tour = useTour();
 
+// the newest game version first
 const versions = computed(() =>
-    game.versions.value.map((v) => ({ value: v.id, label: v.label.replace(/^Hytale\s+/i, '') }))
+    [...game.versions.value]
+        .sort((a, b) => b.id.localeCompare(a.id, undefined, { numeric: true }))
+        .map((v) => ({ value: v.id, label: v.label.replace(/^Hytale\s+/i, '') }))
 );
 const languageOptions = langs.map((value) => ({ value, label: languages[value].name, short: languages[value].short }));
 </script>
@@ -35,7 +40,12 @@ const languageOptions = langs.map((value) => ({ value, label: languages[value].n
         </a>
         <span class="grow" />
 
-        <span class="status" :class="game.state.value" :title="game.error.value || t('Game version of the map data')">
+        <span
+            class="status"
+            data-tour="version"
+            :class="game.state.value"
+            :title="game.error.value || t('Game version of the map data')"
+        >
             <span class="dot" />
             <Select
                 :modelValue="game.versionId.value"
@@ -60,6 +70,7 @@ const languageOptions = langs.map((value) => ({ value, label: languages[value].n
             optionValue="value"
             size="small"
             class="language"
+            data-tour="language"
             :aria-label="t('Language')"
             appendTo="body"
             placement="bottom-end"
@@ -69,6 +80,16 @@ const languageOptions = langs.map((value) => ({ value, label: languages[value].n
                 <span class="current"><Icon :icon="globe" :size="14" />{{ languages[value as Lang]?.short }}</span>
             </template>
         </Select>
+
+        <button
+            class="tour"
+            data-tour="tour"
+            :title="t('Take the tour')"
+            :aria-label="t('Take the tour')"
+            @click="tour.start()"
+        >
+            <Icon :icon="helpCircle" :size="20" />
+        </button>
     </header>
 </template>
 
@@ -136,6 +157,20 @@ header :deep(.vt-select-label) {
     align-items: center;
     height: 100%;
     line-height: 1;
+}
+.tour {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border: 0;
+    border-radius: 8px;
+    background: none;
+    color: var(--muted);
+}
+.tour:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text);
 }
 .current {
     display: inline-flex;

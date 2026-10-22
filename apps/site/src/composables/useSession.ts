@@ -3,6 +3,7 @@ import {
     createWorkerPool,
     defaultPoolSize,
     fromUrl,
+    inspectSave,
     listWorlds,
     loadWorldFromFiles,
     parseMarkers,
@@ -24,19 +25,24 @@ import {
     type HoverInfo,
     type MapOptions
 } from '@hychunk/map';
+import { instanceUrl } from '../gameData';
 import { createStructureSource } from '../structures';
 import { downloadBlob } from '../lib/download';
 import { messageOf } from '../lib/errors';
+import { t } from '../lib/i18n';
+import { pickVersion, type Detected } from '../lib/saveVersion';
 import { parseSeedValue, randomSeed, seed32 } from '../lib/seed';
 import { useGameData } from './useGameData';
+import { markerName, useGameText } from './useGameText';
 import { useMarkerFilters } from './useMarkerFilters';
+import { useToast } from './useToast';
 
-type Layer = 'chunkGrid' | 'regionGrid' | 'spawn' | 'markers' | 'players' | 'playerSkins' | 'terrain';
+type Layer = 'chunkGrid' | 'regionGrid' | 'spawn' | 'markers' | 'players' | 'terrain';
 
-const FIRST_SCREEN_SHARE = 0.97;
-const FIRST_SCREEN_MIN_MS = 1200;
-const FIRST_SCREEN_MAX_MS = 25000;
-const STRUCTURE_WORKERS = 3;
+const FIRST_SCREEN_SHARE = 0.85;
+const FIRST_SCREEN_MIN_MS = 500;
+const FIRST_SCREEN_MAX_MS = 4000;
+const STRUCTURE_WORKERS = 2;
 
 const game = useGameData();
 const { filters } = useMarkerFilters();
@@ -52,7 +58,6 @@ const layers = ref<Record<Layer, boolean>>({
     spawn: true,
     markers: true,
     players: true,
-    playerSkins: true,
     terrain: true
 });
 
@@ -67,6 +72,13 @@ const measureText = ref('');
 const firstScreen = ref({ settled: false, percent: 0 });
 
 const isSeedWorld = computed(() => !!world.value?.id.startsWith('seed-'));
+
+/** An instance world (the Forgotten Temple) opened from a portal: its terrain is its own, so nothing is predicted around it. */
+const INSTANCE = 'instance:';
+const isInstance = (w: WorldData | null) => !!w?.id.startsWith(INSTANCE);
+const inInstance = computed(() => isInstance(world.value));
+/** The world a portal was taken from, and where in it, so the way back lands on the same view. */
+const origin = shallowRef<{ world: WorldData; search: string; hash: string } | null>(null);
 
 let pool: ChunkPool | null = null;
 let picked: File[] = [];
@@ -86,7 +98,7 @@ function configurePool(target: ChunkPool) {
 /** The generator's structures for this world: for a save the chunks it never visited, for a bare seed everything. */
 function startStructures() {
     const data = game.data.value;
-    if (!map.value || !world.value || !data || world.value.config.seed === undefined) return;
+    if (!map.value || !world.value || !data || world.value.config.seed === undefined || isInstance(world.value)) return;
     try {
         const source = createStructureSource(
             data.worldgen,
@@ -157,12 +169,13 @@ async function show(next: WorldData) {
         ...layers.value,
         markerFilters: filters.value,
         styled: !!data,
+        markerLabel: markerName,
         dataVersion: game.versionId.value,
         pool
     };
     const m = new WorldMap(canvas.value, next, options);
     map.value = m;
-    m.setPredicted(!!data);
+    m.setPredicted(!!data && !isInstance(next));
     startStructures();
     bindMap(m);
     liveMarkers.value = m.getVisibleMarkers();
@@ -175,13 +188,41 @@ async function show(next: WorldData) {
     if (__DEV_WORLD__) (window as unknown as { __map: WorldMap }).__map = m;
 }
 
+/** The game version the opened save was written by, when it could be told; `null` for a seed map. */
+const savedBy = ref<Detected | null>(null);
+
+/** A save does not name its game version, so it is told from the chunks (see `pickVersion`), and the map switches to that version's data. */
+async function adoptSaveVersion(next: WorldData) {
+    savedBy.value = null;
+    try {
+        await game.whenSettled();
+        const found = await pickVersion(await inspectSave(next), game.versions.value, game.blocksOf);
+        if (!found) return;
+        savedBy.value = found;
+        if (found.id !== game.versionId.value) await game.select(found.id);
+        else game.writeVersionToAddress(found.id);
+        const version = game.versions.value.find((v) => v.id === found.id)?.label ?? found.id;
+        useToast().show(
+            found.exact
+                ? t('This save was written by {version}', { version })
+                : t('This save is newer than the data here; using {version}', { version }),
+            4500
+        );
+    } catch (e) {
+        console.warn('Could not tell the game version of this save:', e);
+    }
+}
+
 async function openFiles(files: File[], name?: string) {
     error.value = '';
     busy.value = true;
+    origin.value = null;
     try {
         picked = files;
         worlds.value = listWorlds(files);
-        await show(await loadWorldFromFiles(files, name));
+        const opened = await loadWorldFromFiles(files, name);
+        await adoptSaveVersion(opened);
+        await show(opened);
     } catch (e) {
         error.value = messageOf(e);
     } finally {
@@ -212,9 +253,11 @@ async function openSeed(text = seedText.value) {
         }
     }
 
+    savedBy.value = null;
+    origin.value = null;
     const link = new URLSearchParams({ seed: String(seed) });
     if (game.versionId.value) link.set('gv', game.versionId.value);
-    history.replaceState(null, '', `${location.pathname}?${link}`);
+    history.replaceState(null, '', `${location.pathname}?${link}${location.hash}`); // a shared link keeps its view
 
     await show({
         id: `seed-${seed}`,
@@ -243,7 +286,7 @@ async function applySeed() {
     if (!world.value) return;
     const seed = parseSeedValue(seedText.value);
     seedText.value = String(seed);
-    if (isSeedWorld.value) return openSeed(String(seed));
+    if (isSeedWorld.value || inInstance.value) return openSeed(String(seed));
     world.value.config.seed = seed;
     world.value.cacheKey = `${world.value.id}|${world.value.name}|seed-${seed}`;
     await show(world.value);
@@ -251,7 +294,7 @@ async function applySeed() {
 
 async function rollSeed() {
     seedText.value = String(randomSeed());
-    await (world.value && !isSeedWorld.value ? applySeed() : openSeed());
+    await (world.value && !isSeedWorld.value && !inInstance.value ? applySeed() : openSeed());
 }
 
 /** Development only: a world served over HTTP by the Vite plugin (see vite.config.ts). */
@@ -266,7 +309,7 @@ async function openDevWorld() {
             .catch(() => undefined)
     );
     const cache = new Map<string, Promise<RegionFile>>();
-    await show({
+    const dev: WorldData = {
         id: 'dev/',
         name: 'dev',
         source: 'universe',
@@ -282,7 +325,70 @@ async function openDevWorld() {
             if (!cache.has(key)) cache.set(key, fromUrl(`${base}/chunks/${key}.region.bin`).then(RegionFile.open));
             return cache.get(key)!;
         }
-    });
+    };
+    await adoptSaveVersion(dev);
+    await show(dev);
+}
+
+/** Opens an instance world that a portal leads to, from the chunks the game version's pack holds. */
+async function enterInstance(name: string) {
+    const info = game.portals.value?.instances[name];
+    const version = game.versionId.value;
+    if (!info?.openable || !version) return;
+    error.value = '';
+    busy.value = true;
+    try {
+        const base = instanceUrl(version, name);
+        const res = await fetch(`${base}/config.json`);
+        if (!res.ok) throw new Error(`${name}: ${res.status}`);
+        const config = parseWorldConfig(await res.json());
+        const markers = parseMarkers(
+            await fetch(`${base}/resources/BlockMapMarkers.json`)
+                .then((r) => (r.ok ? r.json() : undefined))
+                .catch(() => undefined)
+        );
+        const regions = info.regions
+            .map((r) => parseRegionName(`${r}.region.bin`))
+            .filter((r): r is { rx: number; rz: number } => !!r);
+        const cache = new Map<string, Promise<RegionFile>>();
+        const next: WorldData = {
+            id: `${INSTANCE}${name}`,
+            name: info.title,
+            source: 'universe',
+            config,
+            markers,
+            players: [],
+            start: startPoint(config, [], regions),
+            regions,
+            regionSource: { kind: 'url', base: `${base}/chunks` },
+            cacheKey: `instance|${version}|${name}`,
+            openRegion: (rx, rz) => {
+                const key = `${rx}.${rz}`;
+                if (!cache.has(key)) cache.set(key, fromUrl(`${base}/chunks/${key}.region.bin`).then(RegionFile.open));
+                return cache.get(key)!;
+            }
+        };
+        if (world.value && !isInstance(world.value))
+            origin.value = { world: world.value, search: location.search, hash: location.hash };
+        savedBy.value = null;
+        history.replaceState(null, '', `${location.pathname}?${new URLSearchParams({ gv: version, instance: name })}`);
+        await show(next);
+        const at = config.spawn ?? next.start;
+        if (at) map.value?.goTo(at.x, at.z, 2); // a new world opens on its spot; there is nothing to fly over
+    } catch (e) {
+        error.value = messageOf(e);
+    } finally {
+        busy.value = false;
+    }
+}
+
+/** Back to the world a portal was taken from, on the view it had. */
+async function leaveInstance() {
+    const from = origin.value;
+    if (!from) return;
+    origin.value = null;
+    history.replaceState(null, '', `${location.pathname}${from.search}${from.hash}`);
+    await show(from.world);
 }
 
 function setLayer(layer: Layer, on: boolean) {
@@ -290,8 +396,9 @@ function setLayer(layer: Layer, on: boolean) {
     map.value?.setOptions({ [layer]: on });
 }
 
+/** Flies the view to a block position (see `WorldMap.flyTo`): a click on a place or a player carries the map there. */
 function goTo(x: number, z: number, scale = 3) {
-    map.value?.goTo(x, z, scale);
+    map.value?.flyTo(x, z, scale);
 }
 
 function goToSpawn() {
@@ -332,13 +439,17 @@ function dispose() {
     pool?.destroy();
 }
 
+// Another language for the game's texts: the labels on the map are drawn again.
+const gameTexts = useGameText();
+watch(gameTexts.revision, () => map.value?.setOptions({ markerLabel: (m) => markerName(m) }));
+
 // A new game version: the workers, the colours and the structures all depend on its data.
 watch(game.data, (data) => {
     if (!data) return;
     if (pool) configurePool(pool);
     if (map.value && world.value) {
         map.value.setMapStyle(data.style, data.id);
-        map.value.setPredicted(true);
+        map.value.setPredicted(!inInstance.value);
         map.value.reloadTiles();
         startStructures();
     }
@@ -349,11 +460,15 @@ watch(
     (state) => {
         if (state === 'ready') {
             const seed = new URLSearchParams(location.search).get('seed');
-            if (seed && !world.value) void openSeed(seed);
+            const instance = new URLSearchParams(location.search).get('instance');
+            if (instance && !world.value) void enterInstance(instance);
+            else if (seed && !world.value) void openSeed(seed);
         }
     },
     { once: true }
 );
+
+if (import.meta.env.DEV) (window as unknown as { __session: unknown }).__session = { firstScreen, map, world }; // for timing runs
 
 export function useSession() {
     return {
@@ -372,6 +487,11 @@ export function useSession() {
         measureText,
         firstScreen,
         isSeedWorld,
+        inInstance,
+        origin,
+        enterInstance,
+        leaveInstance,
+        savedBy,
         attachCanvas,
         openFiles,
         openPickedWorld,

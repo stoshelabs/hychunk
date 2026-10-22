@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Badge, Button, Icon } from '@vitral/vue';
-import { check, copy, close, locate } from '@vitral/icons';
+import { check, copy, close, locate, arrowLeft, arrowRight } from '@vitral/icons';
 import { usePlaces } from '../composables/usePlaces';
 import { useSession } from '../composables/useSession';
 import { useShare } from '../composables/useShare';
@@ -9,6 +9,11 @@ import { t } from '../lib/i18n';
 const places = usePlaces();
 const session = useSession();
 const share = useShare();
+
+function goToDestination(instance: string) {
+    places.closeDetails();
+    void session.enterInstance(instance);
+}
 </script>
 
 <template>
@@ -19,8 +24,8 @@ const share = useShare();
                 <h3>{{ places.selected.value.name }}</h3>
                 <div class="tags">
                     <Badge :value="places.categoryLabel(places.selected.value.category)" severity="warn" size="small" />
-                    <span v-if="places.selected.value.biome" class="muted small">{{
-                        places.selected.value.biome
+                    <span v-if="places.selected.value.zone || places.selected.value.biome" class="muted small">{{
+                        [places.selected.value.zone, t(places.selected.value.biome)].filter(Boolean).join(' · ')
                     }}</span>
                 </div>
             </div>
@@ -29,19 +34,25 @@ const share = useShare();
 
         <p class="description">{{ t(places.selected.value.description) }}</p>
 
-        <button
-            class="done"
-            :class="{ on: places.completed.value.has(places.selected.value.id) }"
-            @click="places.toggleDone(places.selected.value.id)"
-        >
-            <Icon :icon="check" :size="14" />
-            {{ places.completed.value.has(places.selected.value.id) ? t('Done') : t('Mark as done') }}
-        </button>
-
         <p v-if="places.selected.value.mobs.length" class="mobs">
             <span class="eyebrow">{{ t('Mobs') }}</span>
             {{ places.selected.value.mobs.join(' · ') }}
         </p>
+
+        <div v-if="places.selected.value.portal" class="portal">
+            <span class="eyebrow">{{ t('Destination') }}</span>
+            <strong>{{ places.selected.value.portal.destination }}</strong>
+            <span v-if="places.selected.value.portal.subtitle" class="muted small">{{
+                places.selected.value.portal.subtitle
+            }}</span>
+            <span class="muted small">{{
+                places.selected.value.portal.kind === 'return'
+                    ? t('Return portal: takes you back out of a fragment or instance')
+                    : places.selected.value.portal.open
+                      ? t('Instance portal: opens a separate world')
+                      : t('Fragment portal: its world is made when the portal is used, so it cannot be shown here')
+            }}</span>
+        </div>
 
         <dl>
             <div>
@@ -56,9 +67,28 @@ const share = useShare();
 
         <footer>
             <Button
+                v-if="places.selected.value.portal?.open"
+                :icon="arrowRight"
+                :label="t('Go to destination')"
+                size="small"
+                class="wide"
+                fluid
+                @click="goToDestination(places.selected.value.portal.open)"
+            />
+            <Button
+                v-else-if="places.selected.value.portal?.back"
+                :icon="arrowLeft"
+                :label="t('Go back')"
+                size="small"
+                class="wide"
+                fluid
+                @click="session.leaveInstance()"
+            />
+            <Button
                 :icon="locate"
                 :label="t('Focus on map')"
                 size="small"
+                fluid
                 variant="outlined"
                 severity="secondary"
                 @click="session.goTo(places.selected.value.x, places.selected.value.z)"
@@ -67,9 +97,20 @@ const share = useShare();
                 :icon="copy"
                 :label="t('Copy /tp')"
                 size="small"
+                fluid
                 @click="
                     share.copyTeleport(places.selected.value.x, places.selected.value.y || 100, places.selected.value.z)
                 "
+            />
+            <Button
+                :icon="check"
+                :label="places.completed.value.has(places.selected.value.id) ? t('Done') : t('Mark as done')"
+                size="small"
+                :variant="places.completed.value.has(places.selected.value.id) ? 'filled' : 'outlined'"
+                :severity="places.completed.value.has(places.selected.value.id) ? 'success' : 'secondary'"
+                class="wide"
+                fluid
+                @click="places.toggleDone(places.selected.value.id)"
             />
         </footer>
     </aside>
@@ -134,23 +175,6 @@ header button:hover {
     color: var(--muted);
     font-size: 12.5px;
 }
-.done {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    align-self: flex-start;
-    padding: 6px 12px;
-    border: 1px solid var(--line-strong);
-    border-radius: 8px;
-    background: var(--surface-2);
-    font-size: 12px;
-    font-weight: 600;
-}
-.done.on {
-    border-color: rgba(52, 211, 153, 0.5);
-    background: rgba(52, 211, 153, 0.15);
-    color: #34d399;
-}
 .mobs {
     margin: 0;
     font-size: 12px;
@@ -178,10 +202,26 @@ dd {
     font-weight: 600;
     font-variant-numeric: tabular-nums;
 }
-footer {
+.portal {
     display: flex;
-    justify-content: flex-end;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 10px;
+    border: 1px solid var(--line-strong);
+    border-radius: 8px;
+    background: var(--surface-2);
+    font-size: 12.5px;
+}
+.portal .eyebrow {
+    margin-bottom: 2px;
+}
+footer {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     gap: 8px;
+}
+footer .wide {
+    grid-column: 1 / -1;
 }
 
 @media (max-width: 768px) {

@@ -4,6 +4,7 @@ export * from './bson/reader';
 export * from './world/config';
 export * from './world/palette';
 export * from './world/chunk';
+export * from './world/saveFormat';
 export * from './world/colors';
 export * from './world/markers';
 export * from './world/render';

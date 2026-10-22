@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted } from 'vue';
 import { Button, Icon, Scrollbar as vScrollbar } from '@vitral/vue';
-import { chevronLeft, close, filter as filterIcon, folderOpen, map as mapIcon } from '@vitral/icons';
+import { chevronLeft, close, filter as filterIcon, folderOpen, map as mapIcon, scale } from '@vitral/icons';
 import { useLayout } from '../composables/useLayout';
 import { usePlaces } from '../composables/usePlaces';
 import { useSession } from '../composables/useSession';
 import { t } from '../lib/i18n';
+import LegalPanel from './LegalPanel.vue';
 import MapPanel from './MapPanel.vue';
 import PlacesPanel from './PlacesPanel.vue';
 import WorldPanel from './WorldPanel.vue';
@@ -23,18 +24,34 @@ const session = useSession();
     <div v-if="layout.isMobile.value && layout.sidebarOpen.value" class="backdrop" @click="layout.toggleSidebar()" />
     <aside v-if="session.world.value" :class="{ open: layout.sidebarOpen.value }">
         <nav class="rail" :aria-label="t('Sections')">
-            <button :class="{ active: layout.tab.value === 'places' }" @click="layout.showTab('places')">
+            <button
+                data-tour="tab-places"
+                :class="{ active: layout.tab.value === 'places' }"
+                @click="layout.showTab('places')"
+            >
                 <Icon :icon="filterIcon" :size="18" />
                 <span>{{ t('Places') }}</span>
                 <b v-if="places.places.value.length">{{ places.places.value.length }}</b>
             </button>
-            <button :class="{ active: layout.tab.value === 'map' }" @click="layout.showTab('map')">
+            <button data-tour="tab-map" :class="{ active: layout.tab.value === 'map' }" @click="layout.showTab('map')">
                 <Icon :icon="mapIcon" :size="18" />
                 <span>{{ t('Map') }}</span>
             </button>
-            <button :class="{ active: layout.tab.value === 'world' }" @click="layout.showTab('world')">
+            <button
+                data-tour="tab-world"
+                :class="{ active: layout.tab.value === 'world' }"
+                @click="layout.showTab('world')"
+            >
                 <Icon :icon="folderOpen" :size="18" />
                 <span>{{ t('World') }}</span>
+            </button>
+            <button
+                data-tour="tab-legal"
+                :class="{ active: layout.tab.value === 'legal' }"
+                @click="layout.showTab('legal')"
+            >
+                <Icon :icon="scale" :size="18" />
+                <span>{{ t('Legal') }}</span>
             </button>
             <Button
                 v-if="layout.isMobile.value"
@@ -69,6 +86,7 @@ const session = useSession();
             <PlacesPanel v-show="layout.tab.value === 'places'" />
             <MapPanel v-show="layout.tab.value === 'map'" />
             <WorldPanel v-show="layout.tab.value === 'world'" />
+            <LegalPanel v-show="layout.tab.value === 'legal'" />
         </div>
     </aside>
 </template>

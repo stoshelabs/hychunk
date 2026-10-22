@@ -6,6 +6,8 @@ import { useLayout } from '../composables/useLayout';
 import { useSession } from '../composables/useSession';
 import { useShare } from '../composables/useShare';
 import { tn, t } from '../lib/i18n';
+import CollapseSection from './CollapseSection.vue';
+import PlayersSection from './PlayersSection.vue';
 import SpawnTools from './SpawnTools.vue';
 
 const ROW_HEIGHT = 56;
@@ -31,49 +33,56 @@ const asPlace = (item: unknown) => item as Place;
 <template>
     <div class="places">
         <div class="head">
+            <PlayersSection />
+
             <InputText
                 v-model="places.search.value"
+                data-tour="places-search"
                 size="small"
                 :placeholder="t('Search by name or type...')"
                 :aria-label="t('Search places')"
                 fluid
             />
 
-            <div class="chips">
-                <ToggleButton
-                    v-for="c in places.chips.value"
-                    :key="c.key"
-                    :modelValue="places.filters.value[c.key]"
-                    size="small"
-                    class="chip"
-                    :class="{ active: places.filters.value[c.key] }"
-                    :title="t(c.title)"
-                    @change="places.toggleFilter(c.key)"
-                >
-                    <img :src="c.icon" alt="" width="18" height="18" />
-                    <span>{{ t(c.label) }}</span>
-                    <b>{{ places.counts.value[c.key] }}</b>
-                </ToggleButton>
-            </div>
-
-            <div class="bar">
-                <button class="link" @click="places.setAllFilters(true)">{{ t('All') }}</button>
-                <button class="link" @click="places.setAllFilters(false)">{{ t('None') }}</button>
-                <label class="done-toggle">
-                    <Checkbox
-                        :modelValue="places.hideCompleted.value"
-                        binary
+            <CollapseSection id="filters" :title="t('Filters')">
+                <div class="chips" data-tour="places-filters">
+                    <ToggleButton
+                        v-for="c in places.chips.value"
+                        :key="c.key"
+                        :modelValue="places.filters.value[c.key]"
                         size="small"
-                        inputId="hide-done"
-                        @update:modelValue="places.setHideCompleted(!!$event)"
-                    />
-                    <span>{{ t('Hide done') }} ({{ places.completed.value.size }})</span>
-                </label>
-                <span class="grow" />
-                <button class="link" :title="t('Save the filtered list as CSV')" @click="places.exportCsv">CSV</button>
-            </div>
+                        class="chip"
+                        :class="{ active: places.filters.value[c.key] }"
+                        :title="t(c.title)"
+                        @change="places.toggleFilter(c.key)"
+                    >
+                        <img :src="c.icon" alt="" width="18" height="18" />
+                        <span>{{ t(c.label) }}</span>
+                        <b>{{ places.counts.value[c.key] }}</b>
+                    </ToggleButton>
+                </div>
 
-            <SpawnTools />
+                <div class="bar" data-tour="places-bar">
+                    <button class="link" @click="places.setAllFilters(true)">{{ t('All') }}</button>
+                    <button class="link" @click="places.setAllFilters(false)">{{ t('None') }}</button>
+                    <label class="done-toggle">
+                        <Checkbox
+                            :modelValue="places.hideCompleted.value"
+                            binary
+                            size="small"
+                            inputId="hide-done"
+                            @update:modelValue="places.setHideCompleted(!!$event)"
+                        />
+                        <span>{{ t('Hide done') }} ({{ places.completed.value.size }})</span>
+                    </label>
+                    <span class="grow" />
+                    <button class="link" :title="t('Save the filtered list as CSV')" @click="places.exportCsv">
+                        CSV
+                    </button>
+                </div>
+            </CollapseSection>
+
+            <SpawnTools data-tour="places-tools" />
             <small class="muted">{{
                 tn(places.list.value.length, '{n} place, nearest first', '{n} places, nearest first')
             }}</small>
@@ -85,6 +94,7 @@ const asPlace = (item: unknown) => item as Place;
             :itemSize="ROW_HEIGHT"
             dataKey="id"
             class="list"
+            data-tour="places-list"
             scrollHeight="100%"
         >
             <template #item="{ item }">

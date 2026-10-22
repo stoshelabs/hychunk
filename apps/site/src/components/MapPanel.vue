@@ -3,6 +3,7 @@ import { computed, ref } from 'vue';
 import { Button, Checkbox, HoverCard, Icon, InputText, ToggleSwitch } from '@vitral/vue';
 import { copy, dices, download, layers as layersIcon, mountain, trash } from '@vitral/icons';
 import { describeGenerator } from '@hychunk/core';
+import { useGameData } from '../composables/useGameData';
 import { useSession } from '../composables/useSession';
 import { useShare } from '../composables/useShare';
 import { t } from '../lib/i18n';
@@ -12,10 +13,10 @@ const LAYERS = [
     { key: 'regionGrid', label: 'Region grid' },
     { key: 'spawn', label: 'Spawn icon' },
     { key: 'markers', label: 'Markers on the map' },
-    { key: 'players', label: 'Players' },
-    { key: 'playerSkins', label: 'Player faces (api.hytl.skin)' }
+    { key: 'players', label: 'Players' }
 ] as const;
 
+const game = useGameData();
 const session = useSession();
 const share = useShare();
 
@@ -36,7 +37,7 @@ async function forgetCache() {
 
 <template>
     <div v-if="session.world.value" class="map-panel">
-        <section class="card">
+        <section class="card" data-tour="map-seed">
             <label class="eyebrow" for="seed">{{ t('World seed') }}</label>
             <div class="row">
                 <InputText
@@ -60,7 +61,7 @@ async function forgetCache() {
             </div>
         </section>
 
-        <section class="card terrain" :class="{ on: session.layers.value.terrain }">
+        <section class="card terrain" data-tour="map-terrain" :class="{ on: session.layers.value.terrain }">
             <Icon :icon="mountain" :size="16" class="icon" />
             <div class="grow">
                 <strong>{{ t('Terrain relief') }}</strong>
@@ -85,7 +86,7 @@ async function forgetCache() {
             />
         </section>
 
-        <form class="row" @submit.prevent="go">
+        <form class="row" data-tour="map-goto" @submit.prevent="go">
             <InputText
                 v-model="coordinates"
                 size="small"
@@ -121,7 +122,7 @@ async function forgetCache() {
             <span>{{ t('Map layers') }}</span
             ><Icon :icon="layersIcon" :size="14" />
         </h3>
-        <section class="card layers">
+        <section class="card layers" data-tour="map-layers">
             <label v-for="layer in LAYERS" :key="layer.key">
                 <Checkbox
                     :modelValue="session.layers.value[layer.key]"
@@ -134,13 +135,18 @@ async function forgetCache() {
             </label>
         </section>
 
-        <details class="card about" open>
+        <details class="card about" data-tour="map-about" open>
             <summary class="eyebrow">{{ t('About this world') }}</summary>
             <dl>
                 <dt>{{ t('Name') }}</dt>
                 <dd>{{ session.world.value.name }}</dd>
                 <dt>{{ t('Seed') }}</dt>
                 <dd>{{ session.seedText.value }}</dd>
+                <dt>{{ t('Game version') }}</dt>
+                <dd>
+                    {{ game.versionId.value
+                    }}<span v-if="session.savedBy.value" class="muted"> ({{ t('from the save') }})</span>
+                </dd>
                 <dt>{{ t('Generator') }}</dt>
                 <dd>{{ generator?.label ?? 'Hytale' }}</dd>
                 <dt>{{ t('Regions') }}</dt>

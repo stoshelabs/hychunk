@@ -1,5 +1,9 @@
 <script setup lang="ts">
+import { usePage } from '../composables/usePage';
 import { t } from '../lib/i18n';
+
+withDefaults(defineProps<{ links?: boolean }>(), { links: true });
+const route = usePage();
 
 const year = new Date().getFullYear();
 </script>
@@ -15,6 +19,12 @@ const year = new Date().getFullYear();
                 'HyChunk is an independent community project. It is not an official Hytale product and is not affiliated with or endorsed by Hypixel Studios. Hytale is a trademark of its owner.'
             )
         }}
+        <template v-if="links">
+            <br />
+            <button @click="route.open('about')">{{ t('About') }}</button> ·
+            <button @click="route.open('terms')">{{ t('Terms') }}</button> ·
+            <button @click="route.open('privacy')">{{ t('Privacy') }}</button>
+        </template>
     </p>
 </template>
 
@@ -26,11 +36,17 @@ const year = new Date().getFullYear();
     line-height: 1.5;
     text-align: center;
 }
-a {
+a,
+button {
+    padding: 0;
+    border: 0;
+    background: none;
+    font-size: inherit;
     color: inherit;
     text-decoration: underline;
 }
-a:hover {
+a:hover,
+button:hover {
     color: var(--accent);
 }
 </style>

@@ -9,6 +9,23 @@ export interface PlayerPosition {
     seen: number;
 }
 
+/** A colour for a player (`#rrggbb`) that stays the same for them: the ring around their face on the map and in the list. */
+export function playerColor(p: { name: string; uuid?: string }): string {
+    const text = p.uuid ?? p.name;
+    let h = 2166136261;
+    for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
+    const hue = (h >>> 0) % 360;
+    // hsl(hue, 75%, 55%) as hex
+    const s = 0.75,
+        l = 0.55,
+        a = s * Math.min(l, 1 - l);
+    const f = (n: number) => {
+        const k = (n + hue / 30) % 12;
+        return Math.round(255 * (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1))));
+    };
+    return `#${[f(0), f(8), f(4)].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+}
+
 const pos = (p: any) =>
     p && typeof p.X === 'number' && typeof p.Z === 'number'
         ? { x: p.X as number, y: (p.Y as number) ?? 0, z: p.Z as number }

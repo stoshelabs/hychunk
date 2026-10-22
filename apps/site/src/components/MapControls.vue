@@ -8,7 +8,7 @@ const session = useSession();
 </script>
 
 <template>
-    <div class="controls" role="toolbar" :aria-label="t('Map controls')">
+    <div class="controls" data-tour="controls" role="toolbar" :aria-label="t('Map controls')">
         <button v-tooltip.left="t('Zoom in')" :aria-label="t('Zoom in')" @click="session.map.value?.zoomBy(1.6)">
             <Icon :icon="plus" :size="16" />
         </button>

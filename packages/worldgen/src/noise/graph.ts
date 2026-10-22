@@ -11,7 +11,11 @@ export type Field = (seed: number, x: number, y: number) => number;
 export type JsonNode = Record<string, any>;
 
 /** Reads a data file by its dotted name (`Mask.Continent` is `Mask/Continent.json`). */
-export type Loader = (name: string) => JsonNode;
+/**
+ * `minMaxSkipsFirst`: game 0.7.0 fixed the `MIN` and `MAX` fractal modes to run `octaves - 1` extra samples; before, they ran
+ * `octaves` (so one more than the octaves said). Set from the game version by `loadWorldGen`.
+ */
+export type Loader = ((name: string) => JsonNode) & { minMaxSkipsFirst?: boolean };
 
 /** Where a node sits, which is what unnamed noises take their seed from. */
 interface Scope {
@@ -232,14 +236,14 @@ function leaf(node: JsonNode, scope: Scope, load: Loader): Field {
     let f: Field;
     if (node.Octaves !== undefined) {
         const octaves: number = node.Octaves, lac: number = node.Lacunarity ?? 2, pers: number = node.Persistence ?? 0.5;
-        f = fractal((node.FractalMode as string | undefined) ?? 'FBM', fn, own, octaves, lac, pers);
+        f = fractal((node.FractalMode as string | undefined) ?? 'FBM', fn, own, octaves, lac, pers, load.minMaxSkipsFirst === true);
     } else {
         f = (s, x, y) => clamp01(fn(s, (s + own) | 0, x, y) * 0.5 + 0.5);
     }
     return modifiers(f, node, () => ({}));
 }
 
-function fractal(mode: string, fn: Primitive, own: number, octaves: number, lac: number, pers: number): Field {
+function fractal(mode: string, fn: Primitive, own: number, octaves: number, lac: number, pers: number, minMaxSkipsFirst = false): Field {
     switch (mode) {
         case 'FBM':
             return (s, x, y) => {
@@ -293,12 +297,12 @@ function fractal(mode: string, fn: Primitive, own: number, octaves: number, lac:
             };
         case 'MIN':
         case 'MAX': {
-            // The loop runs `octaves` times after the first sample, so there are octaves + 1 samples.
+            // Up to game 0.6 the loop runs `octaves` times after the first sample, so there are octaves + 1 samples; 0.7.0 starts it at 1.
             const min = mode === 'MIN';
             return (s, x, y) => {
                 let off = (s + own) | 0;
                 let best = fn(s, off, x, y);
-                for (let i = 0; i < octaves; i++) {
+                for (let i = minMaxSkipsFirst ? 1 : 0; i < octaves; i++) {
                     x *= lac;
                     y *= lac;
                     const d = fn(s, ++off | 0, x, y);

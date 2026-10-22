@@ -1,0 +1,10 @@
+{
+  "Version": 1,
+  "Markers": {
+    "5000,158,4963": {
+      "Name": "server.items.Bench_Abilities.name",
+      "Icon": "Coordinate.png",
+      "MarkerId": "36a828c8-ca00-460d-aaa3-3e6ea7a97bf0"
+    }
+  }
+}

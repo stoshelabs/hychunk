@@ -8,6 +8,7 @@ interface UniqueSpot {
     y: number;
     z: number;
     isSpawn: boolean;
+    marks?: { block: string; x: number; y: number; z: number }[];
 }
 
 /** Where a cave of a dungeon-like type begins (`TerrainGen.caveEntries`). */
@@ -271,6 +272,63 @@ export function siteLabel(key: string): string {
         .replace(/_/g, ' ');
 }
 
+/** How far apart (in blocks) two markers of a group can be and still be the same place, and what the place is called. */
+const GROUPS: { match: RegExp; radius: number; name?: string }[] = [
+    { match: /^city-ruins$/, radius: 200, name: 'Ruined city' },
+    { match: /^city-oceans$/, radius: 200, name: 'Ocean city' },
+    { match: /^cave:/, radius: 96 }
+];
+
+/** The group a structure's marker belongs to, when its pieces are one place: `Monuments.Encounter.City_Ruins.*` is a city of several buildings. */
+export function siteGroup(key: string): string | undefined {
+    const p = key.split('.');
+    if (p[0] === 'Monuments' && p[1] === 'Encounter') {
+        if (p[2] === 'City_Ruins') return 'city-ruins';
+        if (p[2] === 'City_Oceans') return 'city-oceans';
+    }
+    return undefined;
+}
+
+/**
+ * Markers of the same group that lie within the group's radius of each other are redundant: only the first is kept, where it really is. A city with several
+ * buildings or a dungeon with two entrances is one place on the map and one line in the list.
+ */
+export function mergeGroups(markers: MapMarker[]): MapMarker[] {
+    const grouped = new Map<string, MapMarker[]>();
+    const out: MapMarker[] = [];
+    for (const m of markers) {
+        if (!m.group) out.push(m);
+        else (grouped.get(m.group) ?? grouped.set(m.group, []).get(m.group)!).push(m);
+    }
+    for (const [group, members] of grouped) {
+        const rule = GROUPS.find((g) => g.match.test(group));
+        const radius = rule?.radius ?? 0;
+        // single linkage: a marker joins every cluster it lies close to
+        const cluster = members.map((_, i) => i);
+        const find = (i: number): number => (cluster[i] === i ? i : (cluster[i] = find(cluster[i]!)));
+        for (let i = 0; i < members.length; i++)
+            for (let j = i + 1; j < members.length; j++)
+                if (Math.hypot(members[i]!.x - members[j]!.x, members[i]!.z - members[j]!.z) <= radius)
+                    cluster[find(j)] = find(i);
+        const parts = new Map<number, MapMarker[]>();
+        members.forEach((m, i) => (parts.get(find(i)) ?? parts.set(find(i), []).get(find(i))!).push(m));
+        for (const list of parts.values()) {
+            if (list.length === 1) {
+                out.push(list[0]!);
+                continue;
+            }
+            list.sort((a, b) => (a.id < b.id ? -1 : 1));
+            const spawns = [...new Set(list.flatMap((m) => m.spawns ?? []))];
+            out.push({
+                ...list[0]!,
+                name: rule?.name ?? list[0]!.name,
+                ...(spawns.length ? { spawns } : {})
+            });
+        }
+    }
+    return out;
+}
+
 const CELL = 512;
 /** More cells than this on screen and the structures are left out: the map is too far out to tell them apart. */
 const MAX_CELLS = 400;
@@ -313,19 +371,45 @@ export class PoiGenerator {
             ?.unique()
             .then((list) => {
                 if (this.disposed) return;
-                this.unique = list.map((s) => ({
-                    id: `unique-${s.zone}-${s.name}`,
-                    name: s.isSpawn ? 'Spawn room' : 'Temple', // the world's own spawn point (the server's) is drawn by the map as `Spawn`
-                    x: s.x,
-                    y: s.y,
-                    z: s.z,
-                    source: 'block' as const,
-                    icon: s.isSpawn ? 'Spawn' : 'Temple_Gateway'
-                }));
+                this.unique = list.flatMap((s): MapMarker[] => [
+                    {
+                        id: `unique-${s.zone}-${s.name}`,
+                        name: s.isSpawn ? 'Spawn room' : 'Temple', // the world's own spawn point (the server's) is drawn by the map as `Spawn`
+                        x: s.x,
+                        y: s.y,
+                        z: s.z,
+                        source: 'block' as const,
+                        icon: s.isSpawn ? 'Spawn' : 'Temple_Gateway'
+                    },
+                    // a temple with a door to another world is shown by the door too
+                    ...(s.marks ?? []).map((m, i) => ({
+                        id: `portal-${m.x}-${m.z}-${i}`,
+                        name: portalLabel(m.block),
+                        x: m.x,
+                        y: m.y,
+                        z: m.z,
+                        source: 'block' as const,
+                        icon: 'Portal',
+                        category: 'portals',
+                        block: m.block
+                    }))
+                ]);
                 this.revision++;
                 this.onUpdate?.();
             })
             .catch((e) => console.warn('Failed to place the unique structures:', e));
+    }
+
+    private mergedAt = -1;
+    private merged: MapMarker[] = [];
+
+    /** Every marker of the squares worked out so far, with the pieces of one place merged (redone when a square comes in). */
+    private mergedMarkers(): MapMarker[] {
+        if (this.mergedAt !== this.revision) {
+            this.merged = mergeGroups([...this.cells.values()].flat());
+            this.mergedAt = this.revision;
+        }
+        return this.merged;
     }
 
     /** The structures inside a world block bounding box; squares not worked out yet are filled in later. */
@@ -341,15 +425,11 @@ export class PoiGenerator {
         this.wanted = [];
         for (let cz = r0; cz <= r1; cz++) {
             for (let cx = c0; cx <= c1; cx++) {
-                const cached = this.cells.get(`${cx},${cz}`);
-                if (!cached) {
-                    this.wanted.push({ cx, cz });
-                    continue;
-                }
-                for (const m of cached) if (m.x >= minX && m.x <= maxX && m.z >= minZ && m.z <= maxZ) out.push(m);
+                if (!this.cells.has(`${cx},${cz}`)) this.wanted.push({ cx, cz });
             }
         }
         this.pump();
+        for (const m of this.mergedMarkers()) if (m.x >= minX && m.x <= maxX && m.z >= minZ && m.z <= maxZ) out.push(m);
         return out;
     }
 
@@ -385,8 +465,9 @@ export class PoiGenerator {
                 y: c.y,
                 z: c.z,
                 source: 'block' as const,
-                icon: 'Dungeon',
-                category: 'dungeons'
+                icon: null,
+                category: 'dungeons',
+                group: `cave:${c.type}`
             }));
             this.cells.set(`${cx},${cz}`, [
                 ...caveMarkers,
@@ -402,7 +483,8 @@ export class PoiGenerator {
                             z: m.z,
                             source: 'block' as const,
                             icon: 'Portal',
-                            category: 'portals'
+                            category: 'portals',
+                            block: m.block
                         }));
                     }
                     return [
@@ -415,6 +497,7 @@ export class PoiGenerator {
                             source: 'block' as const,
                             icon: null,
                             category: siteCategory(s.key),
+                            ...(siteGroup(s.key) ? { group: siteGroup(s.key) } : {}),
                             ...(s.spawns?.length ? { spawns: s.spawns } : {})
                         }
                     ];

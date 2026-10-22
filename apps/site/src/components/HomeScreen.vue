@@ -46,7 +46,7 @@ const features = [
                 }}
             </p>
 
-            <div class="actions">
+            <div class="actions" data-tour="start">
                 <button class="primary" :disabled="session.busy.value" @click="upload.open">
                     <Icon :icon="folderOpen" :size="18" />
                     {{ t('Open a saved world') }}

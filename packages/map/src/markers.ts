@@ -157,6 +157,14 @@ export function markerStyle(m: MapMarker): { icon: string; color: string } {
     return { icon: m.icon || defaultIcon(m, cat), color: CATEGORY_COLORS[cat] ?? DEFAULT_COLOR };
 }
 
+const PLACE_WORDS = /village|city|capital|town/;
+const FORT_WORDS = /castle|fort|tower|watchtower|outpost/;
+
+/**
+ * The icon of a marker whose own `icon` is not set, by what it is. Every kind of place gets a picture that says what it is, so a
+ * village is not drawn as treasure: dungeons the cave mouth, challenges the sword, villages the house, outposts and castles the
+ * tower, camps the tent, ruins and wrecks the pin, and only treasure rooms the chest.
+ */
 function defaultIcon(m: MapMarker, cat: MarkerCategory): string {
     const name = (m.name || '').toLowerCase();
     switch (cat) {
@@ -165,26 +173,41 @@ function defaultIcon(m: MapMarker, cat: MarkerCategory): string {
         case 'temples':
             return 'Temple_Gateway';
         case 'dungeons':
-            return 'Dungeon';
+            return 'UserB';
+        case 'challenges':
+            return 'UserF';
+        case 'encounters':
+            return PLACE_WORDS.test(name) ? 'Home' : 'Prefab';
         case 'farms':
             return 'Farm';
         case 'camps':
-            return 'Campfire';
+            if (PLACE_WORDS.test(name)) return 'Home';
+            return FORT_WORDS.test(name) ? 'Prefab' : 'UserD';
         case 'uncommonMobs':
             if (name.includes('scarak') || name.includes('broodmother')) return 'Scarak_Broodmother';
             if (name.includes('golem')) return 'Golem_Ancient';
             if (name.includes('dragon')) return 'Dragon_Frost';
-            if (name.includes('void')) return 'Spawn_Void';
+            if (name.includes('void') || name.includes('vazio')) return 'Spawn_Void';
             if (name.includes('trork') || name.includes('chieftain')) return 'Trork_Chieftain';
             return 'Golem_Ancient';
         case 'portals':
-            return name.includes('void') ? 'Portal_Void' : name.includes('invasion') ? 'PortalInvasion' : 'Portal';
+            return name.includes('void') || name.includes('vazio')
+                ? 'Portal_Void'
+                : name.includes('invasion')
+                  ? 'PortalInvasion'
+                  : 'Portal';
+        case 'user':
+            if (name.includes('camp')) return 'Campfire';
+            if (name.includes('home')) return 'Home';
+            if (name.includes('warp')) return 'Warp';
+            return 'UserA';
     }
-    if (name.includes('camp')) return 'Campfire';
-    if (name.includes('home')) return 'Home';
-    if (name.includes('warp')) return 'Warp';
-    return m.source === 'user' ? 'UserA' : 'Prefab';
+    if (name.includes('treasure')) return 'Dungeon';
+    return m.source === 'user' ? 'UserA' : 'UserC';
 }
+
+/** The icon file name (without extension) of a marker: its own, else the one for what it is. */
+export const markerIconName = (m: MapMarker) => markerStyle(m).icon;
 
 /** The colour a group of markers is drawn with: their category's when they share one. */
 export function getClusterAccentColor(markers: MapMarker[]): string {
