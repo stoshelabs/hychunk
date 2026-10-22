@@ -363,7 +363,8 @@ async function enterInstance(name: string) {
             start: startPoint(config, [], regions),
             regions,
             regionSource: { kind: 'url', base: `${base}/chunks` },
-            cacheKey: `instance|${version}|${name}`,
+            // `|2`: before 2 the chunks around the instance were drawn from the overworld generator and saved so
+            cacheKey: `instance|${version}|${name}|2`,
             openRegion: (rx, rz) => {
                 const key = `${rx}.${rz}`;
                 if (!cache.has(key)) cache.set(key, fromUrl(`${base}/chunks/${key}.region.bin`).then(RegionFile.open));

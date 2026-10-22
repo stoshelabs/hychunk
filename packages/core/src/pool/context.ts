@@ -3,7 +3,7 @@ import { REGION_SIZE, slotOf } from '../storage/region';
 import { CorruptChunkError } from '../storage/region';
 import { readSurface, type ChunkSurface } from '../world/chunk';
 import { generatePredictedSurface, predictedEdgeSurface } from '../world/predict';
-import type { WorldConfig } from '../world/config';
+import { describeGenerator, type WorldConfig } from '../world/config';
 import { openRegionSource, type RegionSource } from '../world/source';
 import type { BsonDocument } from '../bson/reader';
 import type { JobContext } from './types';
@@ -44,6 +44,9 @@ export function createContext(source: RegionSource, surfaceCache = 384): JobCont
         }
         if (!cachedWorldGen) return undefined;
         const config = settings.config as WorldConfig | undefined;
+        // only the default generator is ported: an instance or a plugin's world (`Instance_Forgotten_Temple`, ...) would come out as
+        // the overworld of its seed, so the chunks its save lacks stay empty instead
+        if (config && describeGenerator(config).kind !== 'default') return undefined;
         const seed = Number(BigInt.asIntN(32, BigInt(config?.seed ?? 0)));
         if (cachedSeed !== seed || !cachedTerrainGen) {
             cachedSeed = seed;
