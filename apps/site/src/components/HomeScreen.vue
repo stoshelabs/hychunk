@@ -1,14 +1,12 @@
 <script setup lang="ts">
 import { Icon, InputText } from '@vitral/vue';
-import { compass, dices, folderOpen, search as searchIcon, sparkles, warning as warningIcon } from '@vitral/icons';
-import { useCompatibility } from '../composables/useCompatibility';
+import { compass, dices, folderOpen, search as searchIcon, sparkles } from '@vitral/icons';
 import { useSession } from '../composables/useSession';
 import { useUpload } from '../composables/useUpload';
 import { assetUrl } from '../lib/assets';
 import LegalNotice from './LegalNotice.vue';
 import { t } from '../lib/i18n';
 
-const compat = useCompatibility();
 const session = useSession();
 const upload = useUpload();
 
@@ -47,15 +45,6 @@ const features = [
                     )
                 }}
             </p>
-
-            <div v-if="!compat.isSupported" class="compat-banner" role="alert">
-                <Icon :icon="warningIcon" :size="16" class="compat-icon" />
-                <span>{{
-                    t(
-                        'Your browser or device does not support modern Web APIs needed to run the map.'
-                    )
-                }}</span>
-            </div>
 
             <div class="actions" data-tour="start">
                 <button class="primary" :disabled="session.busy.value" @click="upload.open">
@@ -281,25 +270,6 @@ h1 em {
     color: var(--muted);
     font-size: 13px;
     line-height: 1.5;
-}
-
-.compat-banner {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 14px;
-    border-radius: 10px;
-    background: rgba(245, 158, 11, 0.12);
-    border: 1px solid rgba(245, 158, 11, 0.35);
-    color: #fde68a;
-    font-size: 13px;
-    line-height: 1.4;
-    text-align: left;
-    max-width: 580px;
-}
-.compat-icon {
-    flex-shrink: 0;
-    color: #f59e0b;
 }
 
 @media (max-width: 768px) {

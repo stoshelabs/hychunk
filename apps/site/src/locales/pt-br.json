@@ -373,5 +373,5 @@
     "Filters": "Filtros",
     "Unsupported browser or device": "Dispositivo ou navegador não suportado",
     "Your browser or device does not support the modern Web APIs required to run the map (such as DecompressionStream and Web Workers). Please update your browser or use a newer device.": "O seu navegador ou dispositivo não possui suporte às tecnologias modernas da Web necessárias para rodar o mapa (como DecompressionStream e Web Workers). Recomendamos atualizar o seu navegador ou utilizar um dispositivo mais recente.",
-    "Your browser or device does not support modern Web APIs needed to run the map.": "O seu navegador ou dispositivo não possui suporte às tecnologias modernas necessárias para rodar o mapa."
+    "Supported platforms:": "Plataformas suportadas:"
 }
