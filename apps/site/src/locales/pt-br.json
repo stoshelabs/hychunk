@@ -370,5 +370,8 @@
     "Quartzite": "Quartzito",
     "Show or hide the chunk and region grids, the spawn, the markers and the players.": "Mostre ou oculte as grades de chunks e regiões, o spawn, os marcadores e os jogadores.",
     "Go to player {name}": "Ir até {name}",
-    "Filters": "Filtros"
+    "Filters": "Filtros",
+    "Unsupported browser or device": "Dispositivo ou navegador não suportado",
+    "Your browser does not support the modern Web APIs required to run the map (such as DecompressionStream in iOS 16.4+). On iPhone 7 (iOS 15), Safari cannot load the map data.": "O seu navegador não possui suporte às tecnologias modernas da Web necessárias para rodar o mapa (como DecompressionStream no iOS 16.4+). No iPhone 7 (iOS 15), o Safari não consegue carregar os dados do mapa.",
+    "Your browser or device (such as iPhone 7 / iOS 15) does not support modern Web APIs needed to run the map.": "O seu dispositivo ou navegador (como iPhone 7 / iOS 15) não possui suporte a APIs modernas necessárias para rodar o mapa."
 }

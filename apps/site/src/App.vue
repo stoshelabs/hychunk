@@ -8,6 +8,7 @@ import MapStage from './components/MapStage.vue';
 import SidebarPanel from './components/SidebarPanel.vue';
 import SplashScreen from './components/SplashScreen.vue';
 import CacheWarning from './components/CacheWarning.vue';
+import CompatibilityWarning from './components/CompatibilityWarning.vue';
 import ToastHost from './components/ToastHost.vue';
 import UploadDialog from './components/UploadDialog.vue';
 import { useGameData } from './composables/useGameData';
@@ -40,6 +41,7 @@ onBeforeUnmount(session.dispose);
         <LegalPage />
         <AppTour />
         <CacheWarning />
+        <CompatibilityWarning />
         <ToastHost />
     </div>
 </template>
