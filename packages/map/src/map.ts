@@ -38,6 +38,8 @@ export interface MarkerFilters {
 export interface MapOptions {
     /** What a marker is called on the map, when that is not its own `name` (the app translates it). */
     markerLabel?: (m: MapMarker) => string;
+    /** Where a marker icon's picture is, by icon name; `/markers/<name>.png` unless the site is served from a sub-path. */
+    markerIconUrl?: (name: string) => string;
     chunkGrid: boolean;
     regionGrid: boolean;
     spawn: boolean;
@@ -2046,7 +2048,7 @@ export class WorldMap {
         isHovered: boolean,
         dark: boolean
     ) {
-        const img = getMarkerImage(iconName, () => {
+        const img = getMarkerImage(this.options.markerIconUrl?.(iconName) ?? `/markers/${iconName}.png`, () => {
             this.dirty = true;
         });
         const ctx = this.ctx;
@@ -2295,14 +2297,14 @@ function playerHead(p: { name: string; uuid?: string }, onLoaded: () => void): H
 }
 
 const markerIcons = new Map<string, HTMLImageElement>();
-function getMarkerImage(name: string, onLoaded?: () => void): HTMLImageElement | null {
+function getMarkerImage(url: string, onLoaded?: () => void): HTMLImageElement | null {
     if (typeof Image === 'undefined') return null;
-    let img = markerIcons.get(name);
+    let img = markerIcons.get(url);
     if (!img) {
         img = new Image();
-        img.src = `/markers/${name}.png`;
+        img.src = url;
         if (onLoaded) img.onload = onLoaded;
-        markerIcons.set(name, img);
+        markerIcons.set(url, img);
     }
     return img.complete && img.naturalWidth > 0 ? img : null;
 }

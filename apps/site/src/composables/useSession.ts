@@ -27,6 +27,7 @@ import {
 } from '@hychunk/map';
 import { instanceUrl } from '../gameData';
 import { createStructureSource } from '../structures';
+import { markerImage } from '../lib/assets';
 import { downloadBlob } from '../lib/download';
 import { messageOf } from '../lib/errors';
 import { t } from '../lib/i18n';
@@ -170,6 +171,7 @@ async function show(next: WorldData) {
         markerFilters: filters.value,
         styled: !!data,
         markerLabel: markerName,
+        markerIconUrl: markerImage,
         dataVersion: game.versionId.value,
         pool
     };
