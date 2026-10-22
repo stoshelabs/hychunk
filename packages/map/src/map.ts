@@ -201,6 +201,8 @@ export class WorldMap {
     private ruler: { x: number; z: number }[] = [];
     private downAt: { x: number; y: number } | null = null;
     private mousePos: { x: number; y: number } | null = null;
+    private currentHit: { cluster?: MarkerClusterNode; marker?: MapMarker; isSpiderfyOrigin?: boolean } | null = null;
+    private lastEmittedMarkers: MapMarker[] | null = null;
     private spiderfy: SpiderfyState | null = null;
     private smoothCam: {
         startX: number;
@@ -684,13 +686,15 @@ export class WorldMap {
             const origin = this.toScreen(this.spiderfy.worldX, this.spiderfy.worldZ);
             for (let i = this.spiderfy.droplets.length - 1; i >= 0; i--) {
                 const d = this.spiderfy.droplets[i]!;
-                const sx = origin.x + d.currentOffsetX;
-                const sy = origin.y + d.currentOffsetY;
-                if (Math.hypot(sx - px, sy - py) <= 18) {
+                const dx = origin.x + d.currentOffsetX - px;
+                const dy = origin.y + d.currentOffsetY - py;
+                if (dx * dx + dy * dy <= 18 * 18) {
                     return { marker: d.marker };
                 }
             }
-            if (Math.hypot(origin.x - px, origin.y - py) <= 14) {
+            const ox = origin.x - px;
+            const oy = origin.y - py;
+            if (ox * ox + oy * oy <= 14 * 14) {
                 return { cluster: this.spiderfy.cluster, isSpiderfyOrigin: true };
             }
         }
@@ -699,22 +703,25 @@ export class WorldMap {
         const clusters = this.getClusters(visible);
         for (let i = clusters.length - 1; i >= 0; i--) {
             const c = clusters[i]!;
-            if (
-                this.spiderfy &&
-                !this.spiderfy.collapsing &&
-                Math.hypot(c.x - this.spiderfy.worldX, c.z - this.spiderfy.worldZ) < 5
-            ) {
-                continue;
+            if (this.spiderfy && !this.spiderfy.collapsing) {
+                const wdx = c.x - this.spiderfy.worldX;
+                const wdz = c.z - this.spiderfy.worldZ;
+                if (wdx * wdx + wdz * wdz < 25) {
+                    continue;
+                }
             }
             const count = c.markers.length;
+            const dx = c.screenX - px;
+            const dy = c.screenY - py;
+            const d2 = dx * dx + dy * dy;
             if (count > 1) {
                 const r = count >= 100 ? 24 : count >= 10 ? 20 : 18;
-                if (Math.hypot(c.screenX - px, c.screenY - py) <= r) {
+                if (d2 <= r * r) {
                     return { cluster: c };
                 }
             } else {
                 const m = c.markers[0]!;
-                if (Math.hypot(c.screenX - px, c.screenY - py) <= 20) {
+                if (d2 <= 20 * 20) {
                     return { marker: m };
                 }
             }
@@ -758,7 +765,11 @@ export class WorldMap {
         this.lastMove = { x: this.view.x, z: this.view.z, at: now };
         this.dirty = true;
         this.emit('view', { ...this.view });
-        this.emit('markers', this.getVisibleMarkers());
+        const visible = this.getVisibleMarkers();
+        if (visible !== this.lastEmittedMarkers) {
+            this.lastEmittedMarkers = visible;
+            this.emit('markers', visible);
+        }
     }
 
     // ---- input ----------------------------------------------------------------
@@ -789,6 +800,7 @@ export class WorldMap {
             this.smoothCam = null;
             this.flight = null;
             this.mousePos = null;
+            this.currentHit = null;
             c.setPointerCapture(e.pointerId);
             this.pointers.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
             this.pinch = this.pointerDistance();
@@ -798,6 +810,7 @@ export class WorldMap {
             const prev = this.pointers.get(e.pointerId);
             if (prev) {
                 this.mousePos = null;
+                this.currentHit = null;
                 this.pointers.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
                 if (this.pointers.size === 1) {
                     this.view.x -= (e.offsetX - prev.x) / this.view.scale;
@@ -809,10 +822,10 @@ export class WorldMap {
                     this.pinch = d;
                 }
             } else {
-                const prevPos = this.mousePos;
-                const prevHit = prevPos ? this.findTargetAt(prevPos.x, prevPos.y) : null;
+                const prevHit = this.currentHit;
                 this.mousePos = { x: e.offsetX, y: e.offsetY };
                 const newHit = this.findTargetAt(e.offsetX, e.offsetY);
+                this.currentHit = newHit;
                 c.style.cursor = newHit ? 'pointer' : this.measuring ? 'crosshair' : 'grab';
                 const hitChanged =
                     (prevHit !== null) !== (newHit !== null) ||
@@ -861,8 +874,9 @@ export class WorldMap {
         });
         on(c, 'pointercancel', up);
         on(c, 'pointerleave', () => {
-            if (this.mousePos) {
+            if (this.mousePos || this.currentHit) {
                 this.mousePos = null;
+                this.currentHit = null;
                 this.dirty = true;
             }
             this.emit('hover', null);
@@ -1631,30 +1645,39 @@ export class WorldMap {
             rx1 = floorDiv(c1, REGION_SIZE) + 1,
             rz0 = floorDiv(r0, REGION_SIZE) - 1,
             rz1 = floorDiv(r1, REGION_SIZE) + 1;
+        const regionBlockSpan = 32 * REGION_SIZE;
+        const halfW = w * 0.5,
+            halfH = h * 0.5;
+        const vx = this.view.x,
+            vz = this.view.z;
+
         // what the generator says of regions the save lacks goes underneath; whatever was read covers it
         for (const layer of [this.predicted, this.overview.coarse, this.overview.fine]) {
             for (let rz = rz0; rz <= rz1; rz++) {
+                const oy = (rz * regionBlockSpan - vz) * s + halfH;
+                if (oy > h || oy + span < 0) continue;
                 for (let rx = rx0; rx <= rx1; rx++) {
                     const canvas = layer.get(`${rx}.${rz}`);
                     if (!canvas) continue;
-                    const o = this.toScreen(rx * 32 * REGION_SIZE, rz * 32 * REGION_SIZE);
-                    if (o.x > w || o.y > h || o.x + span < 0 || o.y + span < 0) continue;
-                    ctx.drawImage(canvas, o.x, o.y, span, span);
+                    const ox = (rx * regionBlockSpan - vx) * s + halfW;
+                    if (ox > w || ox + span < 0) continue;
+                    ctx.drawImage(canvas, ox, oy, span, span);
                 }
             }
         }
 
-        const origin = this.toScreen(c0 * 32, r0 * 32);
+        const originX = (c0 * 32 - vx) * s + halfW;
+        const originY = (r0 * 32 - vz) * s + halfH;
         const size = 32 * s;
         // Far out, chunks are drawn from the overview alone; walking every visible chunk would cost more than the rest of the frame.
         const detailed = size >= DETAIL_MIN_PX;
         for (let z = r0; detailed && z <= r1; z++) {
+            const sy = Math.floor(originY + (z - r0) * size);
             for (let x = c0; x <= c1; x++) {
                 const tile = this.tiles.get(chunkKey(x, z));
                 if (!tile) continue;
                 // Whole pixels, with a hair of overlap, so chunks do not show seams at fractional zoom.
-                const sx = Math.floor(origin.x + (x - c0) * size),
-                    sy = Math.floor(origin.y + (z - r0) * size);
+                const sx = Math.floor(originX + (x - c0) * size);
                 ctx.drawImage(tile, sx, sy, Math.ceil(size) + 1, Math.ceil(size) + 1);
             }
         }
@@ -1663,12 +1686,14 @@ export class WorldMap {
             ctx.save();
             ctx.globalAlpha = 0.42;
             for (let rz = rz0; rz <= rz1; rz++) {
+                const oy = (rz * regionBlockSpan - vz) * s + halfH;
+                if (oy > h || oy + span < 0) continue;
                 for (let rx = rx0; rx <= rx1; rx++) {
                     const canvas = this.spawnLayer.get(`${rx}.${rz}`);
                     if (!canvas) continue;
-                    const o = this.toScreen(rx * 32 * REGION_SIZE, rz * 32 * REGION_SIZE);
-                    if (o.x > w || o.y > h || o.x + span < 0 || o.y + span < 0) continue;
-                    ctx.drawImage(canvas, o.x, o.y, span, span);
+                    const ox = (rx * regionBlockSpan - vx) * s + halfW;
+                    if (ox > w || ox + span < 0) continue;
+                    ctx.drawImage(canvas, ox, oy, span, span);
                 }
             }
             ctx.restore();
@@ -1733,16 +1758,21 @@ export class WorldMap {
             h = this.canvas.height / this.dpr;
         const a = this.toBlock(0, 0),
             b = this.toBlock(w, h);
+        const halfW = w * 0.5,
+            halfH = h * 0.5;
+        const s = this.view.scale,
+            vx = this.view.x,
+            vz = this.view.z;
         ctx.strokeStyle = color;
         ctx.lineWidth = width;
         ctx.beginPath();
         for (let x = Math.floor(a.x / step) * step; x <= b.x; x += step) {
-            const sx = Math.round(this.toScreen(x, 0).x) + 0.5;
+            const sx = Math.round((x - vx) * s + halfW) + 0.5;
             ctx.moveTo(sx, 0);
             ctx.lineTo(sx, h);
         }
         for (let z = Math.floor(a.z / step) * step; z <= b.z; z += step) {
-            const sy = Math.round(this.toScreen(0, z).y) + 0.5;
+            const sy = Math.round((z - vz) * s + halfH) + 0.5;
             ctx.moveTo(0, sy);
             ctx.lineTo(w, sy);
         }
@@ -1899,10 +1929,14 @@ export class WorldMap {
             };
         }
         const nodes = this.clusterMemo!.nodes;
+        const halfW = (this.canvas.width / this.dpr) * 0.5;
+        const halfH = (this.canvas.height / this.dpr) * 0.5;
+        const scale = this.view.scale;
+        const vx = this.view.x;
+        const vz = this.view.z;
         for (const c of nodes) {
-            const p = this.toScreen(c.x, c.z);
-            c.screenX = p.x;
-            c.screenY = p.y;
+            c.screenX = (c.x - vx) * scale + halfW;
+            c.screenY = (c.z - vz) * scale + halfH;
         }
         return nodes;
     }
@@ -1969,24 +2003,39 @@ export class WorldMap {
 
     private drawMarkers(markers: MapMarker[], dark: boolean) {
         const clusters = this.getClusters(markers);
-        const singles: { m: MapMarker; iconName: string; color: string; label: string | null; emphasized: boolean }[] =
-            [];
+        const singles: {
+            m: MapMarker;
+            iconName: string;
+            color: string;
+            label: string | null;
+            emphasized: boolean;
+            screenX: number;
+            screenY: number;
+        }[] = [];
         let hoveredCluster: { node: MarkerClusterNode } | null = null;
+        const w = this.canvas.width / this.dpr;
+        const h = this.canvas.height / this.dpr;
+        const pad = 40;
 
         for (const c of clusters) {
-            // When spiderfied, the cluster's droplets and anchor are drawn by drawSpiderfy
-            if (
-                this.spiderfy &&
-                !this.spiderfy.collapsing &&
-                Math.hypot(c.x - this.spiderfy.worldX, c.z - this.spiderfy.worldZ) < 5
-            ) {
+            // Frustum cull offscreen clusters
+            if (c.screenX < -pad || c.screenX > w + pad || c.screenY < -pad || c.screenY > h + pad) {
                 continue;
             }
 
-            const isHovered = this.mousePos
-                ? Math.hypot(c.screenX - this.mousePos.x, c.screenY - this.mousePos.y) <=
-                  (c.markers.length > 1 ? (c.markers.length >= 100 ? 24 : c.markers.length >= 10 ? 20 : 18) : 20)
-                : false;
+            // When spiderfied, the cluster's droplets and anchor are drawn by drawSpiderfy
+            if (this.spiderfy && !this.spiderfy.collapsing) {
+                const wdx = c.x - this.spiderfy.worldX;
+                const wdz = c.z - this.spiderfy.worldZ;
+                if (wdx * wdx + wdz * wdz < 25) {
+                    continue;
+                }
+            }
+
+            const mdx = this.mousePos ? c.screenX - this.mousePos.x : 0;
+            const mdy = this.mousePos ? c.screenY - this.mousePos.y : 0;
+            const hitR = c.markers.length > 1 ? (c.markers.length >= 100 ? 24 : c.markers.length >= 10 ? 20 : 18) : 20;
+            const isHovered = this.mousePos ? mdx * mdx + mdy * mdy <= hitR * hitR : false;
 
             if (c.markers.length > 1) {
                 if (isHovered) hoveredCluster = { node: c };
@@ -2014,31 +2063,34 @@ export class WorldMap {
                 (rare && this.view.scale >= 0.35) || this.view.scale >= 2.4 || emphasized
                     ? (this.options.markerLabel?.(m) ?? m.name) || null
                     : null;
-            singles.push({ m, iconName, color, label, emphasized });
+            singles.push({ m, iconName, color, label, emphasized, screenX: c.screenX, screenY: c.screenY });
         }
 
         // Icons first, then the names, and what is hovered or selected last in each pass: a name is never covered by another icon.
         singles.sort((x, y) => Number(x.emphasized) - Number(y.emphasized));
-        const at = (m: MapMarker) => this.toScreen(m.x, m.z);
         for (const s of singles) {
-            const p = at(s.m);
             const faded = this.completed.has(s.m.id) && !s.emphasized;
             if (faded) {
                 this.ctx.save();
                 this.ctx.globalAlpha = 0.4;
             }
-            this.drawOfficialIconScreen(p.x, p.y, s.iconName, null, s.color, s.emphasized, dark);
+            this.drawOfficialIconScreen(s.screenX, s.screenY, s.iconName, null, s.color, s.emphasized, dark);
             if (faded) this.ctx.restore();
         }
         for (const s of singles) {
             if (!s.label) continue;
-            const p = at(s.m);
-            this.drawIconLabel(p.x, p.y, s.label, s.color, s.emphasized, dark);
+            this.drawIconLabel(s.screenX, s.screenY, s.label, s.color, s.emphasized, dark);
         }
         if (hoveredCluster) this.drawCluster(hoveredCluster.node, true, dark);
     }
 
     private drawCluster(cluster: MarkerClusterNode, isHovered: boolean, dark: boolean) {
+        const w = this.canvas.width / this.dpr;
+        const h = this.canvas.height / this.dpr;
+        if (cluster.screenX < -50 || cluster.screenX > w + 50 || cluster.screenY < -50 || cluster.screenY > h + 50) {
+            return;
+        }
+
         const ctx = this.ctx;
         const count = cluster.markers.length;
         const p = { x: cluster.screenX, y: cluster.screenY };
@@ -2146,6 +2198,10 @@ export class WorldMap {
         isHovered: boolean,
         dark: boolean
     ) {
+        const w = this.canvas.width / this.dpr;
+        const h = this.canvas.height / this.dpr;
+        if (sx < -50 || sx > w + 50 || sy < -50 || sy > h + 50) return;
+
         const img = getMarkerImage(this.options.markerIconUrl?.(iconName) ?? `/markers/${iconName}.png`, () => {
             this.dirty = true;
         });
@@ -2421,7 +2477,17 @@ const CATEGORIES = new Set([
     'user'
 ]);
 
+const markerCategoryCache = new WeakMap<MapMarker, keyof MarkerFilters | 'commonMobs'>();
+
 export function getMarkerCategory(m: MapMarker): keyof MarkerFilters | 'commonMobs' {
+    let cat = markerCategoryCache.get(m);
+    if (cat !== undefined) return cat;
+    cat = computeMarkerCategory(m);
+    markerCategoryCache.set(m, cat);
+    return cat;
+}
+
+function computeMarkerCategory(m: MapMarker): keyof MarkerFilters | 'commonMobs' {
     if (m.category && CATEGORIES.has(m.category)) return m.category as keyof MarkerFilters;
     const name = (m.name || '').toLowerCase();
     const icon = (m.icon || '').toLowerCase();

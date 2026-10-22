@@ -40,8 +40,21 @@ export class Overview {
         ctx.fillStyle = rgb;
         const x0 = lx - (lx % stride),
             z0 = lz - (lz % stride);
-        for (let z = z0; z < Math.min(z0 + stride, REGION_SIZE); z++) {
-            for (let x = x0; x < Math.min(x0 + stride, REGION_SIZE); x++) if (exists(x, z)) ctx.fillRect(x, z, 1, 1);
+        const maxZ = Math.min(z0 + stride, REGION_SIZE);
+        const maxX = Math.min(x0 + stride, REGION_SIZE);
+        for (let z = z0; z < maxZ; z++) {
+            let runStart = -1;
+            for (let x = x0; x < maxX; x++) {
+                if (exists(x, z)) {
+                    if (runStart === -1) runStart = x;
+                } else if (runStart !== -1) {
+                    ctx.fillRect(runStart, z, x - runStart, 1);
+                    runStart = -1;
+                }
+            }
+            if (runStart !== -1) {
+                ctx.fillRect(runStart, z, maxX - runStart, 1);
+            }
         }
     }
 

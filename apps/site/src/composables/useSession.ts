@@ -146,8 +146,24 @@ if (typeof document !== 'undefined') {
 function bindMap(m: WorldMap) {
     m.on('markers', (list) => (liveMarkers.value = list));
     m.on('markerClick', (marker) => markerClickListeners.forEach((fn) => fn(marker)));
-    m.on('hover', (h) => (hover.value = h));
-    m.on('loading', (l) => (pending.value = l.pending));
+    m.on('hover', (h) => {
+        if (
+            (h === null && hover.value === null) ||
+            (hover.value &&
+                h &&
+                hover.value.x === h.x &&
+                hover.value.z === h.z &&
+                hover.value.chunkX === h.chunkX &&
+                hover.value.chunkZ === h.chunkZ &&
+                hover.value.explored === h.explored)
+        ) {
+            return;
+        }
+        hover.value = h;
+    });
+    m.on('loading', (l) => {
+        if (pending.value !== l.pending) pending.value = l.pending;
+    });
     m.on('measure', (r) => {
         const sign = (n: number) => (n > 0 ? '+' : '');
         measureText.value = r
@@ -156,7 +172,11 @@ function bindMap(m: WorldMap) {
     });
     let timer = 0;
     m.on('view', (v) => {
-        centre.value = { x: Math.round(v.x), z: Math.round(v.z) };
+        const nx = Math.round(v.x);
+        const nz = Math.round(v.z);
+        if (centre.value.x !== nx || centre.value.z !== nz) {
+            centre.value = { x: nx, z: nz };
+        }
         window.clearTimeout(timer);
         timer = window.setTimeout(() => history.replaceState(null, '', `#${formatView(v)}`), 300);
     });

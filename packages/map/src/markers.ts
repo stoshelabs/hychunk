@@ -151,10 +151,17 @@ const CATEGORY_NAMES: Partial<Record<MarkerCategory, string>> = {
     user: 'Waypoints'
 };
 
+const styleCache = new WeakMap<MapMarker, { icon: string; color: string }>();
+
 /** The icon file (without extension) and colour a marker is drawn with. */
 export function markerStyle(m: MapMarker): { icon: string; color: string } {
-    const cat = getMarkerCategory(m);
-    return { icon: m.icon || defaultIcon(m, cat), color: CATEGORY_COLORS[cat] ?? DEFAULT_COLOR };
+    let cached = styleCache.get(m);
+    if (!cached) {
+        const cat = getMarkerCategory(m);
+        cached = { icon: m.icon || defaultIcon(m, cat), color: CATEGORY_COLORS[cat] ?? DEFAULT_COLOR };
+        styleCache.set(m, cached);
+    }
+    return cached;
 }
 
 const PLACE_WORDS = /village|city|capital|town/;

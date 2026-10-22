@@ -74,9 +74,12 @@ const counts = computed(() => {
 /** The chips worth showing: categories that have places, and any switched off so they can be switched back on. */
 const chips = computed(() => CATEGORY_CHIPS.filter((c) => counts.value[c.key] > 0 || !filters.value[c.key]));
 
+const sortCx = computed(() => Math.round(session.centre.value.x / SORT_STEP) * SORT_STEP);
+const sortCz = computed(() => Math.round(session.centre.value.z / SORT_STEP) * SORT_STEP);
+
 const list = computed(() => {
-    const cx = Math.round(session.centre.value.x / SORT_STEP) * SORT_STEP;
-    const cz = Math.round(session.centre.value.z / SORT_STEP) * SORT_STEP;
+    const cx = sortCx.value;
+    const cz = sortCz.value;
     const query = search.value.trim().toLowerCase();
     return places.value
         .filter((p) => {
