@@ -20,6 +20,7 @@ const data = shallowRef<GameData | null>(null);
 const portals = shallowRef<PortalTable | null>(null);
 const spawns = computed(() => (data.value ? makeSpawns(data.value.spawns) : null));
 const versionId = computed(() => data.value?.id ?? '');
+const version = computed(() => versions.value.find((v) => v.id === versionId.value));
 
 let generator: { source: GameData; value: ReturnType<typeof loadWorldGen> } | null = null;
 
@@ -86,6 +87,7 @@ export function useGameData() {
         state,
         error,
         versions,
+        version,
         data,
         portals,
         spawns,

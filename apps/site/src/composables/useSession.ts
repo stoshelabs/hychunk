@@ -43,7 +43,7 @@ type Layer = 'chunkGrid' | 'regionGrid' | 'spawn' | 'markers' | 'players' | 'ter
 const FIRST_SCREEN_SHARE = 0.85;
 const FIRST_SCREEN_MIN_MS = 500;
 const FIRST_SCREEN_MAX_MS = 4000;
-const STRUCTURE_WORKERS = 2;
+const STRUCTURE_WORKERS = typeof navigator !== 'undefined' && (navigator.hardwareConcurrency || 4) >= 8 ? 2 : 1;
 
 const game = useGameData();
 const { filters } = useMarkerFilters();
@@ -125,8 +125,22 @@ function watchFirstScreen() {
         if ((elapsed > FIRST_SCREEN_MIN_MS && progress >= FIRST_SCREEN_SHARE) || elapsed > FIRST_SCREEN_MAX_MS) {
             firstScreen.value = { settled: true, percent: 100 };
             window.clearInterval(settleTimer);
+            settleTimer = 0;
         }
     }, 200);
+}
+
+if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') {
+            if (settleTimer) {
+                window.clearInterval(settleTimer);
+                settleTimer = 0;
+            }
+        } else if (!firstScreen.value.settled && map.value) {
+            watchFirstScreen();
+        }
+    });
 }
 
 function bindMap(m: WorldMap) {

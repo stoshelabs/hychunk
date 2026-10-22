@@ -166,6 +166,6 @@ export function createWorkerPool(source: RegionSource, factory: () => Worker, si
 
 export function defaultPoolSize() {
     const cores = typeof navigator !== 'undefined' ? navigator.hardwareConcurrency || 4 : 4;
-    // each worker loads the whole generator (about 0.25 s and several MB), so not all the cores
-    return Math.max(2, Math.min(6, cores - 2));
+    // Cap workers to leave sufficient CPU headroom for the main thread, UI rendering and compositor
+    return Math.max(2, Math.min(4, Math.floor(cores / 2)));
 }

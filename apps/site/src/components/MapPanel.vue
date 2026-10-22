@@ -144,7 +144,7 @@ async function forgetCache() {
                 <dd>{{ session.seedText.value }}</dd>
                 <dt>{{ t('Game version') }}</dt>
                 <dd>
-                    {{ game.versionId.value
+                    {{ (game.version.value?.label ?? game.versionId.value).replace(/^Hytale\s+/i, '')
                     }}<span v-if="session.savedBy.value" class="muted"> ({{ t('from the save') }})</span>
                 </dd>
                 <dt>{{ t('Generator') }}</dt>

@@ -94,9 +94,9 @@ const features = [
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-    gap: 40px;
-    padding: 32px 20px;
+    justify-content: flex-start;
+    gap: clamp(24px, 4vh, 40px);
+    padding: clamp(32px, 6vh, 56px) 20px 40px;
     overflow-y: auto;
     background: var(--bg);
 }

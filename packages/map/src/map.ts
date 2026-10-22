@@ -128,12 +128,12 @@ interface DecorSite {
     rotation: number;
     footprint: [number, number, number, number];
 }
-const MAX_TILES = 8000;
+const MAX_TILES = 3000;
 /** Chunks smaller than this on screen are drawn from the overview alone. */
 const DETAIL_MIN_PX = 12;
 const MAX_DETAIL_VISIBLE = 6000;
 
-type Tile = HTMLCanvasElement | null; // null: the save has no such chunk
+type Tile = HTMLCanvasElement | ImageBitmap | null; // null: the save has no such chunk
 const chunkKey = (cx: number, cz: number) => `${cx},${cz}`;
 const floorDiv = (a: number, b: number) => Math.floor(a / b);
 
@@ -176,7 +176,15 @@ export class WorldMap {
     /** Chunks whose real colour is in the overview. */
     private done = new Set<string>();
     private loaded = 0;
-    private dirty = true;
+    private _dirty = true;
+    private get dirty() {
+        return this._dirty;
+    }
+    private set dirty(val: boolean) {
+        this._dirty = val;
+        if (val) this.requestFrame();
+    }
+    private frameRequested = false;
     private raf = 0;
     private dpr = 1;
     private listeners: Record<string, ((v: any) => void)[]> = {};
@@ -338,11 +346,60 @@ export class WorldMap {
 
     /** Pauses drawing and background loading while the map is hidden (for example behind the 3D view). */
     setActive(active: boolean) {
+        if (this.active === active) return;
         this.active = active;
         if (active) {
             this.resize();
             this.dirty = true;
             this.pump();
+        } else {
+            if (this.raf) {
+                cancelAnimationFrame(this.raf);
+                this.raf = 0;
+                this.frameRequested = false;
+            }
+        }
+    }
+
+    private requestFrame() {
+        if (this.frameRequested || this.dead || !this.active) return;
+        this.frameRequested = true;
+        this.raf = requestAnimationFrame(this.loop);
+    }
+
+    private createTile(pixels: Uint8ClampedArray): Promise<Tile> {
+        if (typeof createImageBitmap !== 'undefined') {
+            const imgData = new ImageData(pixels as unknown as Uint8ClampedArray<ArrayBuffer>, 32, 32);
+            return createImageBitmap(imgData);
+        }
+        const tile = document.createElement('canvas');
+        tile.width = tile.height = 32;
+        tile.getContext('2d')!.putImageData(
+            new ImageData(pixels as unknown as Uint8ClampedArray<ArrayBuffer>, 32, 32),
+            0,
+            0
+        );
+        return Promise.resolve(tile);
+    }
+
+    private createRegionCanvas(pixels: Uint8ClampedArray): Promise<HTMLCanvasElement | ImageBitmap> {
+        if (typeof createImageBitmap !== 'undefined') {
+            const imgData = new ImageData(pixels as unknown as Uint8ClampedArray<ArrayBuffer>, REGION_SIZE, REGION_SIZE);
+            return createImageBitmap(imgData);
+        }
+        const c = document.createElement('canvas');
+        c.width = c.height = REGION_SIZE;
+        c.getContext('2d')!.putImageData(
+            new ImageData(pixels as unknown as Uint8ClampedArray<ArrayBuffer>, REGION_SIZE, REGION_SIZE),
+            0,
+            0
+        );
+        return Promise.resolve(c);
+    }
+
+    private closeTile(tile: Tile | HTMLCanvasElement | ImageBitmap | undefined) {
+        if (tile && typeof (tile as ImageBitmap).close === 'function') {
+            (tile as ImageBitmap).close();
         }
     }
 
@@ -380,6 +437,7 @@ export class WorldMap {
         this.decorSquares.clear();
         this.decorSquarePromises.clear();
         this.tileCache = new TileCache(this.cacheKey);
+        for (const tile of this.tiles.values()) this.closeTile(tile);
         this.tiles.clear();
         this.done.clear();
         this.overview.fine.clear();
@@ -590,9 +648,18 @@ export class WorldMap {
         void this.flushOverview();
         void this.tileCache.flushAll();
         if (this.ownPool) this.pool.destroy();
-        cancelAnimationFrame(this.raf);
+        if (this.raf) {
+            cancelAnimationFrame(this.raf);
+            this.raf = 0;
+            this.frameRequested = false;
+        }
         this.off.forEach((f) => f());
+        for (const tile of this.tiles.values()) this.closeTile(tile);
         this.tiles.clear();
+        for (const c of this.predicted.values()) this.closeTile(c);
+        this.predicted.clear();
+        for (const c of this.spawnLayer.values()) this.closeTile(c);
+        this.spawnLayer.clear();
     }
 
     toBlock(px: number, py: number) {
@@ -703,13 +770,18 @@ export class WorldMap {
             this.off.push(() => t.removeEventListener(type, fn, opt));
         };
         c.style.touchAction = 'none';
-        const hide = () => {
-            if (document.visibilityState !== 'hidden') return;
-            void this.flushOverview();
-            void this.tileCache.flushAll();
+        const onVisibility = () => {
+            if (document.visibilityState === 'hidden') {
+                this.setActive(false);
+                void this.flushOverview();
+                void this.tileCache.flushAll();
+            } else {
+                this.setActive(true);
+            }
         };
-        on(document as unknown as HTMLElement, 'visibilitychange', hide);
+        on(document as unknown as HTMLElement, 'visibilitychange', onVisibility);
         on(window, 'pagehide', () => {
+            this.setActive(false);
             void this.flushOverview();
             void this.tileCache.flushAll();
         });
@@ -869,7 +941,7 @@ export class WorldMap {
     // ---- the generator's far-out picture ---------------------------------------
 
     /** One 32 × 32 canvas per region, one pixel per chunk, from the generator rather than from the save. */
-    private predicted = new Map<string, HTMLCanvasElement>();
+    private predicted = new Map<string, HTMLCanvasElement | ImageBitmap>();
     private predictedAsked = new Set<string>();
     private predictedOn = false;
     private predictedInflight = 0;
@@ -877,6 +949,7 @@ export class WorldMap {
     /** Whether the pool can predict (the person's game files have been given to it): draws the world around what the save has. */
     setPredicted(on: boolean) {
         this.predictedOn = on;
+        for (const c of this.predicted.values()) this.closeTile(c);
         this.predicted.clear();
         this.predictedAsked.clear();
         this.dirty = true;
@@ -921,15 +994,15 @@ export class WorldMap {
                 )
                 .then((pixels) => {
                     if (this.dead || !this.predictedOn || !pixels) return;
-                    const c = document.createElement('canvas');
-                    c.width = c.height = REGION_SIZE;
-                    c.getContext('2d')!.putImageData(
-                        new ImageData(pixels as unknown as Uint8ClampedArray<ArrayBuffer>, REGION_SIZE, REGION_SIZE),
-                        0,
-                        0
-                    );
-                    this.predicted.set(key, c);
-                    this.dirty = true;
+                    this.createRegionCanvas(pixels).then((c) => {
+                        if (this.dead || !this.predictedOn) {
+                            this.closeTile(c);
+                            return;
+                        }
+                        this.closeTile(this.predicted.get(key));
+                        this.predicted.set(key, c);
+                        this.dirty = true;
+                    });
                 })
                 .catch((e) => {
                     if (!this.dead) console.warn(`[hychunk] predicted region ${key} failed`, e);
@@ -944,13 +1017,14 @@ export class WorldMap {
     // ---- where a mob spawns ------------------------------------------------------
 
     private spawnArea: { envs?: string[]; biomes?: string[] } | null = null;
-    private spawnLayer = new Map<string, HTMLCanvasElement>();
+    private spawnLayer = new Map<string, HTMLCanvasElement | ImageBitmap>();
     private spawnAsked = new Set<string>();
     private spawnInflight = 0;
 
     /** Paints the chunks whose environment is one of `envs` (a mob's spawn area, orange) or whose biome is one of `biomes` (pink) over the map; `null` clears it. */
     setHighlight(area: { envs?: string[]; biomes?: string[] } | null) {
         this.spawnArea = area && (area.envs?.length || area.biomes?.length) ? area : null;
+        for (const c of this.spawnLayer.values()) this.closeTile(c);
         this.spawnLayer.clear();
         this.spawnAsked.clear();
         this.dirty = true;
@@ -982,15 +1056,15 @@ export class WorldMap {
                 .run<Uint8ClampedArray | null>('highlightRegion', { rx, rz, ...area }, 0.5)
                 .promise.then((pixels) => {
                     if (this.dead || this.spawnArea !== area || !pixels) return;
-                    const c = document.createElement('canvas');
-                    c.width = c.height = REGION_SIZE;
-                    c.getContext('2d')!.putImageData(
-                        new ImageData(pixels as unknown as Uint8ClampedArray<ArrayBuffer>, REGION_SIZE, REGION_SIZE),
-                        0,
-                        0
-                    );
-                    this.spawnLayer.set(key, c);
-                    this.dirty = true;
+                    this.createRegionCanvas(pixels).then((c) => {
+                        if (this.dead || this.spawnArea !== area) {
+                            this.closeTile(c);
+                            return;
+                        }
+                        this.closeTile(this.spawnLayer.get(key));
+                        this.spawnLayer.set(key, c);
+                        this.dirty = true;
+                    });
                 })
                 .catch((e) => {
                     if (!this.dead) console.warn(`[hychunk] spawn area ${key} failed`, e);
@@ -1175,7 +1249,9 @@ export class WorldMap {
                     this.inflight--;
                     this.done.add(key);
                     this.loaded++;
-                    this.dirty = true;
+                    if (detail || this.loaded % 16 === 0 || this.inflight === 0) {
+                        this.dirty = true;
+                    }
                     const idle = this.inflight === 0 && !this.queue.length && !this.scanQueue.size;
                     if (this.loaded % 32 === 0 || idle) {
                         this.emit('loading', {
@@ -1244,14 +1320,15 @@ export class WorldMap {
             this.touchOverview();
         }
         if (!detail) return;
-        const tile = document.createElement('canvas');
-        tile.width = tile.height = 32;
-        tile.getContext('2d')!.putImageData(
-            new ImageData(res.pixels as unknown as Uint8ClampedArray<ArrayBuffer>, 32, 32),
-            0,
-            0
-        );
-        this.tiles.set(key, tile);
+        this.createTile(res.pixels).then((tile) => {
+            if (this.dead) {
+                this.closeTile(tile);
+                return;
+            }
+            this.closeTile(this.tiles.get(key));
+            this.tiles.set(key, tile);
+            this.dirty = true;
+        });
         // a chunk the save lacks is drawn at once without its trees, rocks and plants, and gets them in a second pass
         if (this.predictedOn && !res.decor && !this.existing.has(key)) this.decorTodo.add(key);
         this.pumpDecor();
@@ -1365,15 +1442,19 @@ export class WorldMap {
                     if (this.dead || !res.pixels) return;
                     void this.tileCache.put(cx, cz, res.pixels, false, true);
                     if (!this.tiles.get(k)) return;
-                    const tile = document.createElement('canvas');
-                    tile.width = tile.height = 32;
-                    tile.getContext('2d')!.putImageData(
-                        new ImageData(res.pixels as unknown as Uint8ClampedArray<ArrayBuffer>, 32, 32),
-                        0,
-                        0
-                    );
-                    this.tiles.set(k, tile);
-                    this.dirty = true;
+                    this.createTile(res.pixels).then((tile) => {
+                        if (this.dead) {
+                            this.closeTile(tile);
+                            return;
+                        }
+                        if (!this.tiles.get(k)) {
+                            this.closeTile(tile);
+                            return;
+                        }
+                        this.closeTile(this.tiles.get(k));
+                        this.tiles.set(k, tile);
+                        this.dirty = true;
+                    });
                 })
                 .catch((e) => {
                     if (!this.dead) console.warn(`[hychunk] decor ${k} failed`, e);
@@ -1446,14 +1527,18 @@ export class WorldMap {
         for (const key of this.tiles.keys()) {
             if (this.tiles.size <= MAX_TILES * 0.75) break;
             const [x, z] = key.split(',').map(Number) as [number, number];
-            if (x < c0 || x > c1 || z < r0 || z > r1) this.tiles.delete(key);
+            if (x < c0 || x > c1 || z < r0 || z > r1) {
+                this.closeTile(this.tiles.get(key));
+                this.tiles.delete(key);
+            }
         }
     }
 
     // ---- drawing --------------------------------------------------------------
 
     private loop = () => {
-        if (this.dead) return;
+        this.frameRequested = false;
+        if (this.dead || !this.active) return;
         const now = performance.now();
 
         if (this.flight) {
@@ -1522,7 +1607,9 @@ export class WorldMap {
             this.draw();
             this.evict();
         }
-        this.raf = requestAnimationFrame(this.loop);
+        if (this.flight || this.smoothCam || this.spiderfy || this.dirty) {
+            this.requestFrame();
+        }
     };
 
     private draw() {
@@ -1538,17 +1625,25 @@ export class WorldMap {
 
         const span = 32 * REGION_SIZE * s;
         ctx.imageSmoothingEnabled = false;
+
+        const { c0, r0, c1, r1 } = this.visibleChunks();
+        const rx0 = floorDiv(c0, REGION_SIZE) - 1,
+            rx1 = floorDiv(c1, REGION_SIZE) + 1,
+            rz0 = floorDiv(r0, REGION_SIZE) - 1,
+            rz1 = floorDiv(r1, REGION_SIZE) + 1;
         // what the generator says of regions the save lacks goes underneath; whatever was read covers it
         for (const layer of [this.predicted, this.overview.coarse, this.overview.fine]) {
-            for (const [key, canvas] of layer) {
-                const [rx, rz] = key.split('.').map(Number) as [number, number];
-                const o = this.toScreen(rx * 32 * REGION_SIZE, rz * 32 * REGION_SIZE);
-                if (o.x > w || o.y > h || o.x + span < 0 || o.y + span < 0) continue;
-                ctx.drawImage(canvas, o.x, o.y, span, span);
+            for (let rz = rz0; rz <= rz1; rz++) {
+                for (let rx = rx0; rx <= rx1; rx++) {
+                    const canvas = layer.get(`${rx}.${rz}`);
+                    if (!canvas) continue;
+                    const o = this.toScreen(rx * 32 * REGION_SIZE, rz * 32 * REGION_SIZE);
+                    if (o.x > w || o.y > h || o.x + span < 0 || o.y + span < 0) continue;
+                    ctx.drawImage(canvas, o.x, o.y, span, span);
+                }
             }
         }
 
-        const { c0, r0, c1, r1 } = this.visibleChunks();
         const origin = this.toScreen(c0 * 32, r0 * 32);
         const size = 32 * s;
         // Far out, chunks are drawn from the overview alone; walking every visible chunk would cost more than the rest of the frame.
@@ -1567,11 +1662,14 @@ export class WorldMap {
         if (this.spawnLayer.size) {
             ctx.save();
             ctx.globalAlpha = 0.42;
-            for (const [key, canvas] of this.spawnLayer) {
-                const [rx, rz] = key.split('.').map(Number) as [number, number];
-                const o = this.toScreen(rx * 32 * REGION_SIZE, rz * 32 * REGION_SIZE);
-                if (o.x > w || o.y > h || o.x + span < 0 || o.y + span < 0) continue;
-                ctx.drawImage(canvas, o.x, o.y, span, span);
+            for (let rz = rz0; rz <= rz1; rz++) {
+                for (let rx = rx0; rx <= rx1; rx++) {
+                    const canvas = this.spawnLayer.get(`${rx}.${rz}`);
+                    if (!canvas) continue;
+                    const o = this.toScreen(rx * 32 * REGION_SIZE, rz * 32 * REGION_SIZE);
+                    if (o.x > w || o.y > h || o.x + span < 0 || o.y + span < 0) continue;
+                    ctx.drawImage(canvas, o.x, o.y, span, span);
+                }
             }
             ctx.restore();
         }
