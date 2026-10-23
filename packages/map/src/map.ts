@@ -128,7 +128,7 @@ interface DecorSite {
     rotation: number;
     footprint: [number, number, number, number];
 }
-const MAX_TILES = 3000;
+const MAX_TILES = 1500;
 /** Chunks smaller than this on screen are drawn from the overview alone. */
 const DETAIL_MIN_PX = 12;
 const MAX_DETAIL_VISIBLE = 6000;
@@ -400,8 +400,12 @@ export class WorldMap {
     }
 
     private closeTile(tile: Tile | HTMLCanvasElement | ImageBitmap | undefined) {
-        if (tile && typeof (tile as ImageBitmap).close === 'function') {
+        if (!tile) return;
+        if (typeof (tile as ImageBitmap).close === 'function') {
             (tile as ImageBitmap).close();
+        } else if (typeof HTMLCanvasElement !== 'undefined' && tile instanceof HTMLCanvasElement) {
+            tile.width = 0;
+            tile.height = 0;
         }
     }
 
@@ -1242,7 +1246,8 @@ export class WorldMap {
 
     /** Keeps the pool busy with the most wanted chunks: what is on screen and around it, then the overview. */
     private pump() {
-        const limit = this.pool.size * 2;
+        const hasDetail = this.queue.length > 0;
+        const limit = hasDetail ? this.pool.size * 2 : 1;
         while (!this.dead && this.active && this.inflight < limit) {
             const detail = this.queue.length > 0;
             const next = detail ? this.queue.shift() : this.scanQueue.next(this.currentView());
@@ -1263,7 +1268,8 @@ export class WorldMap {
                     this.inflight--;
                     this.done.add(key);
                     this.loaded++;
-                    if (detail || this.loaded % 16 === 0 || this.inflight === 0) {
+                    const redrawOverview = !detail && this.overviewOnly(this.visibleChunks());
+                    if (detail || (redrawOverview && this.loaded % 64 === 0)) {
                         this.dirty = true;
                     }
                     const idle = this.inflight === 0 && !this.queue.length && !this.scanQueue.size;
@@ -1308,7 +1314,9 @@ export class WorldMap {
             sites ? { cx, cz, decor: true, sites } : { cx, cz },
             detail ? 0 : 1
         ).promise;
-        void this.tileCache.put(cx, cz, res.pixels, res.corrupt, Boolean(res.decor));
+        if (detail) {
+            void this.tileCache.put(cx, cz, res.pixels, res.corrupt, Boolean(res.decor));
+        }
         return res;
     }
 
@@ -1532,18 +1540,75 @@ export class WorldMap {
     }
 
     private evict() {
-        if (this.tiles.size <= MAX_TILES) return;
-        const keep = this.prefetchRect();
-        const c0 = keep.c0 - 2,
-            r0 = keep.r0 - 2,
-            c1 = keep.c1 + 2,
-            r1 = keep.r1 + 2;
-        for (const key of this.tiles.keys()) {
-            if (this.tiles.size <= MAX_TILES * 0.75) break;
-            const [x, z] = key.split(',').map(Number) as [number, number];
-            if (x < c0 || x > c1 || z < r0 || z > r1) {
-                this.closeTile(this.tiles.get(key));
-                this.tiles.delete(key);
+        if (this.tiles.size > MAX_TILES) {
+            const keep = this.prefetchRect();
+            const c0 = keep.c0 - 2,
+                r0 = keep.r0 - 2,
+                c1 = keep.c1 + 2,
+                r1 = keep.r1 + 2;
+            for (const key of this.tiles.keys()) {
+                if (this.tiles.size <= MAX_TILES * 0.75) break;
+                const [x, z] = key.split(',').map(Number) as [number, number];
+                if (x < c0 || x > c1 || z < r0 || z > r1) {
+                    this.closeTile(this.tiles.get(key));
+                    this.tiles.delete(key);
+                }
+            }
+        }
+
+        // Evict distant predicted region canvases (each is 512x512 = ~1MB)
+        const maxPredicted = 24;
+        if (this.predicted.size > maxPredicted) {
+            const v = this.visibleChunks();
+            const rx0 = floorDiv(v.c0, REGION_SIZE) - 2;
+            const rx1 = floorDiv(v.c1, REGION_SIZE) + 2;
+            const rz0 = floorDiv(v.r0, REGION_SIZE) - 2;
+            const rz1 = floorDiv(v.r1, REGION_SIZE) + 2;
+            for (const key of this.predicted.keys()) {
+                if (this.predicted.size <= maxPredicted * 0.75) break;
+                const [rx, rz] = key.split('.').map(Number) as [number, number];
+                if (rx < rx0 || rx > rx1 || rz < rz0 || rz > rz1) {
+                    this.closeTile(this.predicted.get(key));
+                    this.predicted.delete(key);
+                    this.predictedAsked.delete(key);
+                }
+            }
+        }
+
+        // Evict distant spawn/highlight layers
+        const maxSpawn = 24;
+        if (this.spawnLayer.size > maxSpawn) {
+            const v = this.visibleChunks();
+            const rx0 = floorDiv(v.c0, REGION_SIZE) - 2;
+            const rx1 = floorDiv(v.c1, REGION_SIZE) + 2;
+            const rz0 = floorDiv(v.r0, REGION_SIZE) - 2;
+            const rz1 = floorDiv(v.r1, REGION_SIZE) + 2;
+            for (const key of this.spawnLayer.keys()) {
+                if (this.spawnLayer.size <= maxSpawn * 0.75) break;
+                const [rx, rz] = key.split('.').map(Number) as [number, number];
+                if (rx < rx0 || rx > rx1 || rz < rz0 || rz > rz1) {
+                    this.closeTile(this.spawnLayer.get(key));
+                    this.spawnLayer.delete(key);
+                    this.spawnAsked.delete(key);
+                }
+            }
+        }
+
+        // Evict distant decor squares
+        const maxDecor = 128;
+        if (this.decorSquares.size > maxDecor) {
+            const keep = this.prefetchRect();
+            const qx0 = floorDiv(keep.c0, 4) - 2;
+            const qx1 = floorDiv(keep.c1, 4) + 2;
+            const qz0 = floorDiv(keep.r0, 4) - 2;
+            const qz1 = floorDiv(keep.r1, 4) + 2;
+            for (const key of this.decorSquares.keys()) {
+                if (this.decorSquares.size <= maxDecor * 0.75) break;
+                const [qx, qz] = key.split(',').map(Number) as [number, number];
+                if (qx < qx0 || qx > qx1 || qz < qz0 || qz > qz1) {
+                    this.decorSquares.delete(key);
+                    this.decorSquarePromises.delete(key);
+                }
             }
         }
     }

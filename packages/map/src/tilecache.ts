@@ -3,8 +3,8 @@ import { loadRegionTiles, saveRegionTiles } from './cache';
 
 const SLOTS = REGION_SIZE * REGION_SIZE;
 const PX = 32 * 32 * 4;
-/** Regions held in memory at once: 4 MB each when full. */
-const MAX_REGIONS = 16;
+/** Regions held in memory at once: 4 MB each when full (8 * 4MB = 32 MB max). */
+const MAX_REGIONS = 8;
 const FLUSH_AFTER_MS = 4000;
 
 // Chunk states in the cache; 0 is a chunk not read yet. DECOR is a predicted chunk that already has its trees, rocks and plants.

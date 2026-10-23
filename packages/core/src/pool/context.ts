@@ -60,10 +60,20 @@ export function createContext(source: RegionSource, surfaceCache = 384): JobCont
         return cachedTerrainGen ?? undefined;
     };
 
+    const MAX_OPEN_REGIONS = 32;
     const region = (rx: number, rz: number) => {
         const key = `${rx}.${rz}`;
         let p = regions.get(key);
-        if (!p) regions.set(key, (p = openRegionSource(source, rx, rz)));
+        if (p) {
+            regions.delete(key);
+            regions.set(key, p);
+            return p;
+        }
+        p = openRegionSource(source, rx, rz);
+        regions.set(key, p);
+        if (regions.size > MAX_OPEN_REGIONS) {
+            regions.delete(regions.keys().next().value!);
+        }
         return p;
     };
 
