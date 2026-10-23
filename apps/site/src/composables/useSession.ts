@@ -37,8 +37,18 @@ import { useGameData } from './useGameData';
 import { markerName, useGameText } from './useGameText';
 import { useMarkerFilters } from './useMarkerFilters';
 import { useToast } from './useToast';
+import { isHighPerformanceDevice } from './useCompatibility';
+import { readStorage, STORAGE_KEYS, writeStorage } from '../lib/storage';
 
 type Layer = 'chunkGrid' | 'regionGrid' | 'spawn' | 'markers' | 'players' | 'terrain';
+
+function defaultTerrainEnabled(): boolean {
+    const saved = readStorage(STORAGE_KEYS.layerTerrain);
+    if (saved !== null) return saved === '1';
+    return isHighPerformanceDevice();
+}
+
+const isLowSpecDevice = ref(!isHighPerformanceDevice());
 
 const FIRST_SCREEN_SHARE = 0.85;
 const FIRST_SCREEN_MIN_MS = 500;
@@ -59,7 +69,7 @@ const layers = ref<Record<Layer, boolean>>({
     spawn: true,
     markers: true,
     players: true,
-    terrain: true
+    terrain: defaultTerrainEnabled()
 });
 
 const error = ref('');
@@ -182,6 +192,8 @@ function bindMap(m: WorldMap) {
     });
 }
 
+let perfToastShown = false;
+
 async function show(next: WorldData) {
     seedText.value = String(next.config.seed);
     map.value?.destroy();
@@ -218,6 +230,13 @@ async function show(next: WorldData) {
     measuring.value = false;
     measureText.value = '';
     watchFirstScreen();
+    if (!perfToastShown && isLowSpecDevice.value && !layers.value.terrain) {
+        perfToastShown = true;
+        useToast().show(
+            t('Graphics in performance mode. You can enable Terrain relief in map options for enhanced visuals.'),
+            5000
+        );
+    }
 
     const linked = parseView(location.hash);
     if (linked) m.goTo(linked.x, linked.z, linked.scale);
@@ -431,6 +450,9 @@ async function leaveInstance() {
 
 function setLayer(layer: Layer, on: boolean) {
     layers.value = { ...layers.value, [layer]: on };
+    if (layer === 'terrain') {
+        writeStorage(STORAGE_KEYS.layerTerrain, on ? '1' : '0');
+    }
     map.value?.setOptions({ [layer]: on });
 }
 
@@ -525,6 +547,7 @@ export function useSession() {
         measureText,
         firstScreen,
         isSeedWorld,
+        isLowSpecDevice,
         inInstance,
         origin,
         enterInstance,

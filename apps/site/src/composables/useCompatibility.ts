@@ -43,6 +43,32 @@ function detectIssues(): CompatibilityIssue[] {
 const issues = ref<CompatibilityIssue[]>(detectIssues());
 const dismissed = ref(false);
 
+export function isHighPerformanceDevice(): boolean {
+    if (typeof navigator === 'undefined') return true;
+
+    // Check logical cores: 8 or more cores is standard for capable desktop/laptops
+    const cores = navigator.hardwareConcurrency || 4;
+
+    // Check device memory (Chromium API, in GiB)
+    const memory = (navigator as unknown as { deviceMemory?: number }).deviceMemory;
+    if (typeof memory === 'number' && memory < 6) {
+        return false;
+    }
+
+    // Mobile phones and smaller portable touch devices have thermal limits and smaller batteries
+    const isMobile =
+        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+        (typeof window !== 'undefined' &&
+            ('ontouchstart' in window || navigator.maxTouchPoints > 1) &&
+            Math.min(window.screen?.width || window.innerWidth, window.screen?.height || window.innerHeight) < 768);
+
+    if (isMobile) {
+        return false;
+    }
+
+    return cores >= 8;
+}
+
 export function useCompatibility() {
     return {
         isSupported: issues.value.length === 0,

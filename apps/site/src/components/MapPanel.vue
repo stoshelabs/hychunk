@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { Button, Checkbox, HoverCard, Icon, InputText, ToggleSwitch } from '@vitral/vue';
-import { copy, dices, download, layers as layersIcon, mountain, trash } from '@vitral/icons';
+import { copy, dices, download, layers as layersIcon, mountain, sparkles, trash, warning as warningIcon } from '@vitral/icons';
 import { describeGenerator } from '@hychunk/core';
 import { useGameData } from '../composables/useGameData';
 import { useSession } from '../composables/useSession';
@@ -85,6 +85,21 @@ async function forgetCache() {
                 @update:modelValue="session.setLayer('terrain', !!$event)"
             />
         </section>
+
+        <div v-if="!session.layers.value.terrain" class="terrain-hint">
+            <Icon :icon="sparkles" :size="13" class="hint-icon" />
+            <span>{{
+                t(
+                    'Graphics set to flat colors for better performance. Turn on Terrain relief for 3D shaded hills, but it may impact performance on modest devices.'
+                )
+            }}</span>
+        </div>
+        <div v-else-if="session.isLowSpecDevice.value" class="terrain-hint warning">
+            <Icon :icon="warningIcon" :size="13" class="hint-icon" />
+            <span>{{
+                t('Terrain relief is active. This improves graphics, but may reduce performance on this device.')
+            }}</span>
+        </div>
 
         <form class="row" data-tour="map-goto" @submit.prevent="go">
             <InputText
@@ -223,6 +238,28 @@ async function forgetCache() {
 }
 .terrain.on small {
     color: var(--accent);
+}
+.terrain-hint {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: var(--radius-sm, 6px);
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 11.5px;
+    line-height: 1.4;
+    margin-top: -6px;
+}
+.terrain-hint.warning {
+    border-color: rgba(245, 158, 11, 0.35);
+    background: rgba(245, 158, 11, 0.08);
+    color: #fbbf24;
+}
+.terrain-hint .hint-icon {
+    flex: none;
+    margin-top: 2px;
 }
 .help {
     display: grid;

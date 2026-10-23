@@ -2,7 +2,8 @@ export const STORAGE_KEYS = {
     hideDone: 'hychunk.hideDone',
     done: (worldKey: string) => `hychunk.done.${worldKey}`,
     section: (id: string) => `hychunk.section.${id}`,
-    ignoreCacheWarning: 'hychunk.ignoreCacheWarning'
+    ignoreCacheWarning: 'hychunk.ignoreCacheWarning',
+    layerTerrain: 'hychunk.layer.terrain'
 };
 
 export function readStorage(key: string): string | null {
