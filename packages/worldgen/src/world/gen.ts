@@ -1242,20 +1242,39 @@ export function loadWorldGen(src: Source, catalog?: PrefabCatalog): WorldGen {
                         footprint: spot.footprint
                     });
                     if (spot.name === 'Temple') {
-                        // Central temple dome
+                        // 3 Bolas centrais:
+                        // Bola 1: Cúpula verde com folhas ao Norte (dz = -24)
                         pushIfOverlaps({
                             x: spot.x,
                             y: spot.y,
-                            z: spot.z,
+                            z: spot.z - 5,
                             name: 'Monuments.Unique.Temple.Temple.Unique_Temple_001',
                             rotation: 0,
                             footprint: [-15, 15, -32, 34]
                         });
-                        // 3 Outer Towers (North, South, West)
+                        // Bola 2: Cúpula de pedra/mármore central (dz = 0), onde as pontes Oeste e Leste se cruzam
                         pushIfOverlaps({
                             x: spot.x,
                             y: spot.y,
-                            z: spot.z - 60,
+                            z: spot.z + 8,
+                            name: 'Monuments.Story.Forgotten_temple.Grasslands.Story_Forgotten_Temple_Grasslands_Entrance_001',
+                            rotation: 180,
+                            footprint: [-17, 22, -13, 28]
+                        });
+                        // Bola 3: Cúpula circular do Portal ao Sul (dz = +24) onde fica o Forgotten Temple Gateway
+                        pushIfOverlaps({
+                            x: spot.x,
+                            y: spot.y,
+                            z: spot.z + 32,
+                            name: 'Monuments.Story.Forgotten_temple.Grasslands.Story_Forgotten_Temple_Grasslands_Entrance_001',
+                            rotation: 0,
+                            footprint: [-22, 17, -28, 13]
+                        });
+                        // 3 Torres externas (Norte, Sul, Oeste)
+                        pushIfOverlaps({
+                            x: spot.x,
+                            y: spot.y,
+                            z: spot.z - 68,
                             name: 'Monuments.Unique.Temple.Tower.Forgotten_Temple_Portal_Tower_001',
                             rotation: 180,
                             footprint: [-6, 6, -13, -1]
@@ -1263,21 +1282,21 @@ export function loadWorldGen(src: Source, catalog?: PrefabCatalog): WorldGen {
                         pushIfOverlaps({
                             x: spot.x,
                             y: spot.y,
-                            z: spot.z + 60,
+                            z: spot.z + 68,
                             name: 'Monuments.Unique.Temple.Tower.Forgotten_Temple_Portal_Tower_001',
                             rotation: 0,
                             footprint: [-6, 6, 1, 13]
                         });
                         pushIfOverlaps({
-                            x: spot.x - 60,
+                            x: spot.x - 68,
                             y: spot.y,
                             z: spot.z,
                             name: 'Monuments.Unique.Temple.Tower.Forgotten_Temple_Portal_Tower_001',
                             rotation: 270,
                             footprint: [-13, -1, -6, 6]
                         });
-                        // Connecting bridges
-                        for (const dz of [-20, -30, -40, -50]) {
+                        // Pontes verticais
+                        for (const dz of [-35, -45, -55]) {
                             pushIfOverlaps({
                                 x: spot.x,
                                 y: spot.y,
@@ -1287,7 +1306,7 @@ export function loadWorldGen(src: Source, catalog?: PrefabCatalog): WorldGen {
                                 footprint: [-2, 2, -9, 0]
                             });
                         }
-                        for (const dz of [20, 30, 40, 50]) {
+                        for (const dz of [45, 55]) {
                             pushIfOverlaps({
                                 x: spot.x,
                                 y: spot.y,
@@ -1297,7 +1316,8 @@ export function loadWorldGen(src: Source, catalog?: PrefabCatalog): WorldGen {
                                 footprint: [-2, 2, 0, 9]
                             });
                         }
-                        for (const dx of [-20, -30, -40, -50]) {
+                        // Pontes horizontais (saindo da Bola 2 no centro)
+                        for (const dx of [-15, -25, -35, -45, -55]) {
                             pushIfOverlaps({
                                 x: spot.x + dx,
                                 y: spot.y,
@@ -1307,7 +1327,7 @@ export function loadWorldGen(src: Source, catalog?: PrefabCatalog): WorldGen {
                                 footprint: [-9, 0, -2, 2]
                             });
                         }
-                        for (const dx of [20, 30]) {
+                        for (const dx of [15, 25]) {
                             pushIfOverlaps({
                                 x: spot.x + dx,
                                 y: spot.y,
