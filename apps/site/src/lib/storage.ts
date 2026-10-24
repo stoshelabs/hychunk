@@ -3,7 +3,10 @@ export const STORAGE_KEYS = {
     done: (worldKey: string) => `hychunk.done.${worldKey}`,
     section: (id: string) => `hychunk.section.${id}`,
     ignoreCacheWarning: 'hychunk.ignoreCacheWarning',
-    layerTerrain: 'hychunk.layer.terrain'
+    layerTerrain: 'hychunk.layer.terrain',
+    googleClientId: 'hychunk.google.clientId',
+    googleDriveFileId: 'hychunk.google.driveFileId',
+    googleLastSync: 'hychunk.google.lastSync'
 };
 
 export function readStorage(key: string): string | null {

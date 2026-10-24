@@ -5,6 +5,7 @@ import { usePlaces, type Place } from '../composables/usePlaces';
 import { useLayout } from '../composables/useLayout';
 import { useSession } from '../composables/useSession';
 import { useShare } from '../composables/useShare';
+import { useBackup } from '../composables/useBackup';
 import { tn, t } from '../lib/i18n';
 import CollapseSection from './CollapseSection.vue';
 import PlayersSection from './PlayersSection.vue';
@@ -16,6 +17,7 @@ const places = usePlaces();
 const session = useSession();
 const share = useShare();
 const layout = useLayout();
+const backup = useBackup();
 
 const select = (place: Place) => {
     places.select(place);
@@ -76,6 +78,9 @@ const asPlace = (item: unknown) => item as Place;
                         <span>{{ t('Hide done') }} ({{ places.completed.value.size }})</span>
                     </label>
                     <span class="grow" />
+                    <button class="link" :title="t('Backup & Cloud (Google Drive)')" @click="backup.open()">
+                        {{ t('Backup') }}
+                    </button>
                     <button class="link" :title="t('Save the filtered list as CSV')" @click="places.exportCsv">
                         CSV
                     </button>

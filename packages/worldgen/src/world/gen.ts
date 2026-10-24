@@ -1208,7 +1208,7 @@ export function loadWorldGen(src: Source, catalog?: PrefabCatalog): WorldGen {
                     list = catalog
                         ? prefabSites(rect, (key) => (decor ? DECOR_PREFABS : MONUMENT_PREFABS).test(key), decor ? DECOR_COARSE : 8)
                         : [];
-                    if (squares.size > 400) squares.clear();
+                    while (squares.size > 400) squares.delete(squares.keys().next().value!);
                     squares.set(k, list);
                 }
                 return list;
@@ -1221,16 +1221,103 @@ export function loadWorldGen(src: Source, catalog?: PrefabCatalog): WorldGen {
                 const out: PrefabSite[] = [];
                 for (const spot of uniquePrefabs()) {
                     if (!spot.variant || !spot.footprint) continue;
-                    const f = spot.footprint;
-                    if (spot.x + f[1] >= x0 && spot.x + f[0] <= x1 && spot.z + f[3] >= z0 && spot.z + f[2] <= z1)
-                        out.push({
+                    const pushIfOverlaps = (site: {
+                        x: number;
+                        y: number;
+                        z: number;
+                        name: string;
+                        rotation: number;
+                        footprint: [number, number, number, number];
+                    }) => {
+                        const f = site.footprint;
+                        if (site.x + f[1] >= x0 && site.x + f[0] <= x1 && site.z + f[3] >= z0 && site.z + f[2] <= z1)
+                            out.push(site as unknown as PrefabSite);
+                    };
+                    pushIfOverlaps({
+                        x: spot.x,
+                        y: spot.y,
+                        z: spot.z,
+                        name: spot.variant,
+                        rotation: spot.rotation ?? 0,
+                        footprint: spot.footprint
+                    });
+                    if (spot.name === 'Temple') {
+                        // Central temple dome
+                        pushIfOverlaps({
                             x: spot.x,
                             y: spot.y,
                             z: spot.z,
-                            name: spot.variant,
-                            rotation: spot.rotation ?? 0,
-                            footprint: f
-                        } as unknown as PrefabSite);
+                            name: 'Monuments.Unique.Temple.Temple.Unique_Temple_001',
+                            rotation: 0,
+                            footprint: [-15, 15, -32, 34]
+                        });
+                        // 3 Outer Towers (North, South, West)
+                        pushIfOverlaps({
+                            x: spot.x,
+                            y: spot.y,
+                            z: spot.z - 60,
+                            name: 'Monuments.Unique.Temple.Tower.Forgotten_Temple_Portal_Tower_001',
+                            rotation: 180,
+                            footprint: [-6, 6, -13, -1]
+                        });
+                        pushIfOverlaps({
+                            x: spot.x,
+                            y: spot.y,
+                            z: spot.z + 60,
+                            name: 'Monuments.Unique.Temple.Tower.Forgotten_Temple_Portal_Tower_001',
+                            rotation: 0,
+                            footprint: [-6, 6, 1, 13]
+                        });
+                        pushIfOverlaps({
+                            x: spot.x - 60,
+                            y: spot.y,
+                            z: spot.z,
+                            name: 'Monuments.Unique.Temple.Tower.Forgotten_Temple_Portal_Tower_001',
+                            rotation: 270,
+                            footprint: [-13, -1, -6, 6]
+                        });
+                        // Connecting bridges
+                        for (const dz of [-20, -30, -40, -50]) {
+                            pushIfOverlaps({
+                                x: spot.x,
+                                y: spot.y,
+                                z: spot.z + dz,
+                                name: 'Monuments.Unique.Temple.Bridge.Geometry.Forgotten_Temple_Portal_Bridge_001',
+                                rotation: 180,
+                                footprint: [-2, 2, -9, 0]
+                            });
+                        }
+                        for (const dz of [20, 30, 40, 50]) {
+                            pushIfOverlaps({
+                                x: spot.x,
+                                y: spot.y,
+                                z: spot.z + dz,
+                                name: 'Monuments.Unique.Temple.Bridge.Geometry.Forgotten_Temple_Portal_Bridge_001',
+                                rotation: 0,
+                                footprint: [-2, 2, 0, 9]
+                            });
+                        }
+                        for (const dx of [-20, -30, -40, -50]) {
+                            pushIfOverlaps({
+                                x: spot.x + dx,
+                                y: spot.y,
+                                z: spot.z,
+                                name: 'Monuments.Unique.Temple.Bridge.Geometry.Forgotten_Temple_Portal_Bridge_001',
+                                rotation: 270,
+                                footprint: [-9, 0, -2, 2]
+                            });
+                        }
+                        for (const dx of [20, 30]) {
+                            pushIfOverlaps({
+                                x: spot.x + dx,
+                                y: spot.y,
+                                z: spot.z,
+                                name: 'Monuments.Unique.Temple.Bridge.Geometry.Forgotten_Temple_Portal_Bridge_001',
+                                rotation: 90,
+                                footprint: [0, 9, -2, 2]
+                            });
+                        }
+                    }
                 }
                 for (const kind of decor ? [false, true] : [false]) {
                     const reach = kind ? 64 : 128; // how far a prefab of that kind can stick out of the square its spot is in

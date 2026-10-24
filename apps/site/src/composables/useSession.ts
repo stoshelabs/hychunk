@@ -428,7 +428,6 @@ async function enterInstance(name: string) {
         if (world.value && !isInstance(world.value))
             origin.value = { world: world.value, search: location.search, hash: location.hash };
         savedBy.value = null;
-        history.replaceState(null, '', `${location.pathname}?${new URLSearchParams({ gv: version, instance: name })}`);
         await show(next);
         const at = config.spawn ?? next.start;
         if (at) map.value?.goTo(at.x, at.z, 2); // a new world opens on its spot; there is nothing to fly over
@@ -520,9 +519,7 @@ watch(
     (state) => {
         if (state === 'ready') {
             const seed = new URLSearchParams(location.search).get('seed');
-            const instance = new URLSearchParams(location.search).get('instance');
-            if (instance && !world.value) void enterInstance(instance);
-            else if (seed && !world.value) void openSeed(seed);
+            if (seed && !world.value) void openSeed(seed);
         }
     },
     { once: true }

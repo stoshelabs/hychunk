@@ -1,6 +1,8 @@
-const MAX_SEED = 2147483647;
+const MIN_RANDOM_SEED = 1_000_000_000;
+const MAX_SEED = 2_147_483_647;
 
-export const randomSeed = () => Math.floor(Math.random() * MAX_SEED);
+/** Generates a standard full-length 10-digit world seed as typically created by the game. */
+export const randomSeed = () => Math.floor(MIN_RANDOM_SEED + Math.random() * (MAX_SEED - MIN_RANDOM_SEED));
 
 /** The generator works on the low 32 bits of a world's seed. */
 export const seed32 = (seed: number | bigint | string) => Number(BigInt.asIntN(32, BigInt(seed)));

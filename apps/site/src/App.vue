@@ -11,6 +11,7 @@ import CacheWarning from './components/CacheWarning.vue';
 import UnsupportedScreen from './components/UnsupportedScreen.vue';
 import ToastHost from './components/ToastHost.vue';
 import UploadDialog from './components/UploadDialog.vue';
+import BackupDialog from './components/BackupDialog.vue';
 import { useCompatibility } from './composables/useCompatibility';
 import { useGameData } from './composables/useGameData';
 import { useLayout } from './composables/useLayout';
@@ -42,6 +43,7 @@ onBeforeUnmount(session.dispose);
             <HomeScreen v-if="!session.world.value" />
         </main>
         <UploadDialog />
+        <BackupDialog />
         <LegalPage />
         <AppTour />
         <CacheWarning />

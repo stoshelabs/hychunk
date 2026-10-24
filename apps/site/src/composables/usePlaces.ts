@@ -207,15 +207,19 @@ function closeDetails() {
     session.map.value?.setSelected(null);
 }
 
-// What was marked done in this world, and the filters, belong to the map being shown.
-watch(session.map, (map) => {
-    if (!map) return;
+function reloadCompleted() {
     try {
         completed.value = new Set(JSON.parse(readStorage(STORAGE_KEYS.done(worldKey())) ?? '[]'));
     } catch {
         completed.value = new Set();
     }
-    map.setCompleted(completed.value, hideCompleted.value);
+    session.map.value?.setCompleted(completed.value, hideCompleted.value);
+}
+
+// What was marked done in this world, and the filters, belong to the map being shown.
+watch(session.map, (map) => {
+    if (!map) return;
+    reloadCompleted();
     selected.value = null;
 });
 watch(filters, (value) => session.map.value?.setOptions({ markerFilters: value }));
@@ -236,6 +240,7 @@ export function usePlaces() {
         setAllFilters,
         toggleDone,
         setHideCompleted,
+        reloadCompleted,
         exportCsv,
         select,
         closeDetails,

@@ -3,7 +3,7 @@ import type { ChunkSurface } from './chunk';
 import { styledBlockColor, styledFluidColor, type MapStyle } from './mapStyle';
 
 /** Bump when the drawing of a chunk changes, so tiles saved by an older version are not reused. */
-export const RENDER_VERSION = 10; // 10: tiles are drawn once with their decor, and the unique structures (spawn room, temple) are drawn; 9: second pass for decor; 8: structures; 7: neighbour edge shading
+export const RENDER_VERSION = 11; // 11: prioritize decor squares and prevent timing out into bald chunk tiles; 10: single-pass decor; 9: second pass; 8: structures
 
 // The game's ImageBuilder (the map the client draws): light (-0.2, 0.8, 0.5), shade = 0.4 + 0.6 * lambert.
 const LX = -0.2 / Math.sqrt(0.93);

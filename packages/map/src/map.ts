@@ -115,7 +115,7 @@ const MAX_SCALE = 32;
 /** Bump when the structures a square holds change (what is searched, how they are named), so saved squares are not reused. */
 const STRUCTURES_VERSION = 5;
 /** How long a tile of a predicted chunk waits for the trees, rocks and plants of its squares before it is drawn without them. */
-const DECOR_WAIT_MS = 700;
+const DECOR_WAIT_MS = 4000;
 /** How long a read of the browser's cache may take before the chunk is drawn without it. */
 const CACHE_WAIT_MS = 1500;
 
@@ -1403,7 +1403,7 @@ export class WorldMap {
     /** The sites that can reach a chunk or its neighbours' edges, once their squares are in. */
     private async decorSitesFor(cx: number, cz: number): Promise<DecorSite[]> {
         const need = this.decorSquaresFor(cx, cz);
-        const lists = await Promise.all(need.map(({ qx, qz }) => this.decorSquare(qx, qz, 0.8)));
+        const lists = await Promise.all(need.map(({ qx, qz }) => this.decorSquare(qx, qz, -1)));
         const x0 = cx * 32 - 40,
             x1 = cx * 32 + 71,
             z0 = cz * 32 - 40,
@@ -1436,30 +1436,34 @@ export class WorldMap {
         want.sort((a, b) => a.d - b.d);
         for (const { qx, qz } of want) {
             if (this.decorSquareInflight >= Math.max(2, this.pool.size)) break;
-            void this.decorSquare(qx, qz, 1.5);
+            void this.decorSquare(qx, qz, -0.5);
         }
     }
 
     /** A cached tile from before the second kind of data existed, or one drawn without its decor: given its decor now. */
     private pumpDecor() {
-        if (this.dead || !this.active || !this.predictedOn || !this.decorTodo.size || this.queue.length) return;
+        if (this.dead || !this.active || !this.predictedOn || !this.decorTodo.size) return;
         const v = this.visibleChunks();
         const mx = (v.c0 + v.c1) / 2,
             mz = (v.r0 + v.r1) / 2;
         const near = [...this.decorTodo]
             .map((k) => {
                 const [cx, cz] = k.split(',').map(Number) as [number, number];
-                return { k, cx, cz, d: (cx - mx) ** 2 + (cz - mz) ** 2 };
+                const isVisible = cx >= v.c0 && cx <= v.c1 && cz >= v.r0 && cz <= v.r1;
+                return { k, cx, cz, isVisible, d: (cx - mx) ** 2 + (cz - mz) ** 2 };
             })
             .sort((a, b) => a.d - b.d);
-        const limit = Math.max(1, this.pool.size - 1);
-        for (const { k, cx, cz } of near) {
+        if (this.queue.length && !near[0]?.isVisible) return;
+        const limit = Math.max(2, this.pool.size);
+        for (const { k, cx, cz, isVisible } of near) {
             if (this.decorInflight >= limit) break;
             this.decorTodo.delete(k);
             if (!this.tiles.get(k)) continue; // gone from memory meanwhile
             this.decorInflight++;
             void this.decorSitesFor(cx, cz)
-                .then((sites) => this.pool.run<TileResult>('tile', { cx, cz, decor: true, sites }, 2).promise)
+                .then((sites) =>
+                    this.pool.run<TileResult>('tile', { cx, cz, decor: true, sites }, isVisible ? 0 : 2).promise
+                )
                 .then((res) => {
                     if (this.dead || !res.pixels) return;
                     void this.tileCache.put(cx, cz, res.pixels, false, true);

@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { Button, Icon } from '@vitral/vue';
-import { check, folderOpen, sparkles } from '@vitral/icons';
+import { check, cloud, folderOpen, sparkles } from '@vitral/icons';
 import { useSession } from '../composables/useSession';
 import { useUpload } from '../composables/useUpload';
+import { useBackup } from '../composables/useBackup';
 import { t, tn } from '../lib/i18n';
 
 const session = useSession();
 const upload = useUpload();
+const backup = useBackup();
 
 const isCurrent = (id: string) => !session.isSeedWorld.value && session.world.value?.id === id;
 </script>
@@ -35,6 +37,15 @@ const isCurrent = (id: string) => !session.isSeedWorld.value && session.world.va
                 severity="secondary"
                 fluid
                 @click="session.rollSeed()"
+            />
+            <Button
+                :icon="cloud"
+                :label="t('Backup & Google Drive')"
+                size="small"
+                variant="outlined"
+                severity="secondary"
+                fluid
+                @click="backup.open()"
             />
         </div>
 
